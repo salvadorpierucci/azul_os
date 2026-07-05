@@ -1,0 +1,37 @@
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+}
+
+.nav-link.active {
+  background: rgba(197, 168, 128, 0.15);
+  color: #c5a880 !important;
+  border-right: 3px solid #c5a880;
+}
+
+.editorial-shadow {
+  box-shadow: 0 10px 40px -15px rgba(58, 88, 116, 0.08);
+}
+
+.page-section.hidden { display: none; }
+
+/* Cards */
+.card-mob {
+  transition: all 0.2s;
+}
+.card-mob:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -8px rgba(58, 88, 116, 0.12);
+}
+
+/* Calendar */
+.cal-day {
+  min-height: 60px;
+  font-size: 0.75rem;
+}
+.cal-day.has-event { font-weight: 600; }
+.cal-day.today { background: #f4efe6; border-radius: 0.25rem; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #c5a880; border-radius: 3px; }

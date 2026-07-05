@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Azul OS — Gestión de Eventos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Hanken+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: "#c5a880",
+            "on-primary": "#ffffff",
+            navy: "#3a5874",
+            "navy-dark": "#2c4359",
+            "navy-darker": "#1a2a3a",
+            ivory: "#fdfbf7",
+            "ivory-dark": "#f4efe6",
+            charcoal: "#1a2a3a",
+          },
+          fontFamily: {
+            display: ["Playfair Display"],
+            body: ["Hanken Grotesk"],
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="bg-ivory text-charcoal font-body min-h-screen">
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed left-0 top-0 h-full w-64 bg-navy-darker z-50 flex flex-col transition-transform duration-300 -translate-x-full lg:translate-x-0">
+    <div class="p-6 border-b border-primary/20">
+      <h1 class="font-display text-2xl text-primary">Azul OS</h1>
+      <p class="text-ivory/60 text-xs mt-1">Gestión de Eventos</p>
+    </div>
+    <nav class="flex-1 py-4 space-y-1">
+      <a href="#" onclick="navigate('dashboard')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="dashboard">
+        <span class="material-symbols-outlined text-xl">dashboard</span> Dashboard
+      </a>
+      <a href="#" onclick="navigate('calendario')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="calendario">
+        <span class="material-symbols-outlined text-xl">calendar_month</span> Calendario
+      </a>
+      <a href="#" onclick="navigate('eventos')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="eventos">
+        <span class="material-symbols-outlined text-xl">event</span> Eventos
+      </a>
+      <a href="#" onclick="navigate('mobiliario')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="mobiliario">
+        <span class="material-symbols-outlined text-xl">chair</span> Mobiliario
+      </a>
+      <a href="#" onclick="navigate('clientes')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="clientes">
+        <span class="material-symbols-outlined text-xl">person</span> Clientes
+      </a>
+      <a href="#" onclick="navigate('presupuestos')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="presupuestos">
+        <span class="material-symbols-outlined text-xl">receipt_long</span> Presupuestos
+      </a>
+      <a href="#" onclick="navigate('finanzas')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="finanzas">
+        <span class="material-symbols-outlined text-xl">payments</span> Finanzas
+      </a>
+      <a href="#" onclick="navigate('whatsapp')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="whatsapp">
+        <span class="material-symbols-outlined text-xl">chat</span> WhatsApp Bot
+      </a>
+    </nav>
+    <div class="p-4 border-t border-primary/20">
+      <button onclick="toggleMobileSidebar()" class="lg:hidden text-ivory/60 hover:text-primary w-full text-left text-sm">Cerrar menu</button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="lg:ml-64 min-h-screen">
+    <!-- Top bar mobile -->
+    <div class="lg:hidden flex items-center gap-3 p-4 bg-navy-darker text-primary sticky top-0 z-40">
+      <button onclick="toggleMobileSidebar()" class="material-symbols-outlined">menu</button>
+      <span class="font-display text-lg">Azul OS</span>
+    </div>
+
+    <!-- Page content -->
+    <div id="page-content" class="p-6 md:p-8 max-w-7xl mx-auto">
+      <!-- Dashboard (default) -->
+      <div id="page-dashboard" class="page-section">
+        <h2 class="font-display text-3xl mb-6">Dashboard</h2>
+        <!-- KPIs -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8" id="kpi-cards">
+          <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+            <p class="text-xs uppercase tracking-wider text-charcoal/50 mb-1">Proximos Eventos</p>
+            <p class="text-3xl font-display text-navy" id="kpi-proximos">—</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+            <p class="text-xs uppercase tracking-wider text-charcoal/50 mb-1">Reservas Pendientes</p>
+            <p class="text-3xl font-display text-primary" id="kpi-reservas">—</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+            <p class="text-xs uppercase tracking-wider text-charcoal/50 mb-1">Ingresos Mes</p>
+            <p class="text-3xl font-display text-navy" id="kpi-ingresos">—</p>
+          </div>
+          <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+            <p class="text-xs uppercase tracking-wider text-charcoal/50 mb-1">Alertas Stock</p>
+            <p class="text-3xl font-display text-red-500" id="kpi-alertas">—</p>
+          </div>
+        </div>
+        <!-- Proximos Eventos -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-3">Proximos Eventos</h3>
+          <div id="dashboard-eventos" class="space-y-2 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- Calendario page -->
+      <div id="page-calendario" class="page-section hidden">
+        <h2 class="font-display text-3xl mb-6">Calendario</h2>
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+          <div id="calendar-header" class="flex items-center justify-between mb-4">
+            <button onclick="changeMonth(-1)" class="material-symbols-outlined text-navy hover:text-primary cursor-pointer">chevron_left</button>
+            <h3 class="font-display text-xl" id="calendar-month"></h3>
+            <button onclick="changeMonth(1)" class="material-symbols-outlined text-navy hover:text-primary cursor-pointer">chevron_right</button>
+          </div>
+          <div id="calendar-grid" class="grid grid-cols-7 gap-1"></div>
+          <div class="flex gap-4 mt-4 text-xs">
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-primary inline-block"></span> Confirmado</span>
+            <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-yellow-400 inline-block"></span> Reserva</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Eventos page -->
+      <div id="page-eventos" class="page-section hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+          <h2 class="font-display text-3xl">Eventos</h2>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="relative flex-1 sm:flex-none">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-charcoal/30 text-lg">search</span>
+              <input id="evento-search" type="text" placeholder="Buscar evento..." oninput="onEventoSearch(this.value)" class="pl-9 pr-3 py-2 border border-ivory-dark rounded-lg text-sm w-full sm:w-56 focus:border-primary outline-none"/>
+            </div>
+            <button onclick="openEventoModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1 flex-shrink-0">
+              <span class="material-symbols-outlined text-lg">add</span> Nuevo
+            </button>
+          </div>
+        </div>
+        <div id="eventos-list" class="space-y-3"></div>
+      </div>
+
+      <!-- Mobiliario page -->
+      <div id="page-mobiliario" class="page-section hidden">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="font-display text-3xl">Mobiliario</h2>
+          <button onclick="openMobiliarioModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1">
+            <span class="material-symbols-outlined text-lg">add</span> Agregar
+          </button>
+        </div>
+        <div class="mb-4 flex items-center gap-3 flex-wrap">
+          <div class="flex items-center gap-2">
+            <label for="mobiliario-fecha" class="text-sm text-charcoal/60 flex items-center gap-1">
+              <span class="material-symbols-outlined text-base">event</span> Disponibilidad para fecha:
+            </label>
+            <input id="mobiliario-fecha" type="date" onchange="setMobFechaDisponibilidad(this.value)" class="border border-ivory-dark rounded-lg px-3 py-1.5 text-sm focus:border-primary outline-none bg-white"/>
+            <button onclick="document.getElementById('mobiliario-fecha').value=''; setMobFechaDisponibilidad('')" class="text-xs text-charcoal/40 hover:text-primary transition">Limpiar</button>
+          </div>
+        </div>
+        <div class="mb-4 flex gap-2 flex-wrap" id="mobiliario-filtros"></div>
+        <div id="mobiliario-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></div>
+      </div>
+
+      <!-- Clientes page -->
+      <div id="page-clientes" class="page-section hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+          <h2 class="font-display text-3xl">Clientes</h2>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="relative flex-1 sm:flex-none">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-charcoal/30 text-lg">search</span>
+              <input id="cliente-search" type="text" placeholder="Buscar cliente..." oninput="onClienteSearch(this.value)" class="pl-9 pr-3 py-2 border border-ivory-dark rounded-lg text-sm w-full sm:w-56 focus:border-primary outline-none"/>
+            </div>
+            <button onclick="openClienteModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1 flex-shrink-0">
+              <span class="material-symbols-outlined text-lg">add</span> Nuevo
+            </button>
+          </div>
+        </div>
+        <div id="clientes-list" class="space-y-2"></div>
+      </div>
+
+      <!-- Presupuestos page -->
+      <div id="page-presupuestos" class="page-section hidden">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+          <h2 class="font-display text-3xl">Presupuestos</h2>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="relative flex-1 sm:flex-none">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-charcoal/30 text-lg">search</span>
+              <input id="ppto-search" type="text" placeholder="Buscar presupuesto..." oninput="onPptoSearch(this.value)" class="pl-9 pr-3 py-2 border border-ivory-dark rounded-lg text-sm w-full sm:w-56 focus:border-primary outline-none"/>
+            </div>
+            <button onclick="openNuevoPresupuestoModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1 flex-shrink-0">
+              <span class="material-symbols-outlined text-lg">add</span> Nuevo Presupuesto
+            </button>
+          </div>
+        </div>
+        <!-- Estado filter pills -->
+        <div class="flex gap-2 flex-wrap mb-4" id="ppto-estado-filtros">
+          <button onclick="filterPptoEstado('')" data-estado="" class="px-3 py-1 rounded-full text-xs font-medium transition bg-navy text-ivory">Todos</button>
+          <button onclick="filterPptoEstado('borrador')" data-estado="borrador" class="px-3 py-1 rounded-full text-xs font-medium transition bg-ivory-dark text-charcoal/60 hover:bg-ivory-dark">Borrador</button>
+          <button onclick="filterPptoEstado('enviado')" data-estado="enviado" class="px-3 py-1 rounded-full text-xs font-medium transition bg-ivory-dark text-charcoal/60 hover:bg-ivory-dark">Enviado</button>
+          <button onclick="filterPptoEstado('confirmado')" data-estado="confirmado" class="px-3 py-1 rounded-full text-xs font-medium transition bg-ivory-dark text-charcoal/60 hover:bg-ivory-dark">Confirmado</button>
+          <button onclick="filterPptoEstado('cancelado')" data-estado="cancelado" class="px-3 py-1 rounded-full text-xs font-medium transition bg-ivory-dark text-charcoal/60 hover:bg-ivory-dark">Cancelado</button>
+        </div>
+        <div id="presupuestos-list" class="space-y-3"></div>
+      </div>
+
+      <!-- Cliente Perfil page -->
+      <div id="page-cliente-perfil" class="page-section hidden">
+        <button onclick="goBackToClientes()" class="flex items-center gap-1 text-sm text-charcoal/60 hover:text-primary mb-4 transition">
+          <span class="material-symbols-outlined text-lg">arrow_back</span> Volver a Clientes
+        </button>
+        <div id="cliente-perfil-content"></div>
+      </div>
+
+      <!-- Finanzas page -->
+      <div id="page-finanzas" class="page-section hidden">
+        <!-- Header + month selector + add button -->
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
+          <h2 class="font-display text-3xl">Finanzas</h2>
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <select id="finanzas-anio" onchange="loadFinanzas()" class="border border-ivory-dark rounded-lg px-3 py-2 text-sm focus:border-primary outline-none bg-white"></select>
+            <select id="finanzas-mes" onchange="loadFinanzas()" class="border border-ivory-dark rounded-lg px-3 py-2 text-sm focus:border-primary outline-none bg-white"></select>
+            <button onclick="openFinanzaModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1 flex-shrink-0">
+              <span class="material-symbols-outlined text-lg">add</span> Nuevo
+            </button>
+          </div>
+        </div>
+
+        <!-- Summary cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6" id="finanzas-summary"></div>
+
+        <!-- Registro list card -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display text-lg">Registros</h3>
+            <div class="flex gap-1" id="finanzas-tipo-filtros">
+              <button onclick="filterFinanzasTipo('todos')" data-tipo="todos" class="px-3 py-1 rounded-full text-xs font-medium transition">Todos</button>
+              <button onclick="filterFinanzasTipo('ingreso')" data-tipo="ingreso" class="px-3 py-1 rounded-full text-xs font-medium transition">Ingresos</button>
+              <button onclick="filterFinanzasTipo('egreso')" data-tipo="egreso" class="px-3 py-1 rounded-full text-xs font-medium transition">Egresos</button>
+            </div>
+          </div>
+          <div id="finanzas-list" class="space-y-2 text-sm"></div>
+        </div>
+      </div>
+
+      <!-- WhatsApp page -->
+      <div id="page-whatsapp" class="page-section hidden">
+        <h2 class="font-display text-3xl mb-6">WhatsApp Bot</h2>
+        <p class="text-sm text-charcoal/60 mb-6">Configura el comportamiento del bot de WhatsApp. Los cambios se aplican en tiempo real.</p>
+
+        <!-- Conexion Evolution API -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">link</span> Conexion Evolution API
+          </h3>
+          <div class="flex items-center gap-3 mb-4">
+            <span class="w-3 h-3 rounded-full bg-gray-400" id="wa-status-dot"></span>
+            <span id="wa-status-text" class="text-sm text-charcoal/60">Desconectado</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm mb-1 text-charcoal/60">API URL</label>
+              <input id="wa-url" type="text" placeholder="http://localhost:8080" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none bg-ivory"/>
+            </div>
+            <div>
+              <label class="block text-sm mb-1 text-charcoal/60">API Key</label>
+              <input id="wa-key" type="password" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none bg-ivory"/>
+            </div>
+            <div>
+              <label class="block text-sm mb-1 text-charcoal/60">Instancia</label>
+              <input id="wa-instance" type="text" placeholder="mi-whatsapp" value="mi-whatsapp" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none bg-ivory"/>
+            </div>
+          </div>
+          <div class="flex gap-3 mt-4">
+            <button onclick="checkWhatsAppStatus()" class="bg-primary text-on-primary px-4 py-2 rounded-lg hover:opacity-90 transition text-sm">Verificar Conexion</button>
+            <button onclick="configWhatsAppWebhook()" class="border border-primary text-primary px-4 py-2 rounded-lg hover:bg-primary/10 transition text-sm">Configurar Webhook</button>
+          </div>
+          <div id="wa-status-detail" class="mt-3 text-xs text-charcoal/50 hidden"></div>
+        </div>
+
+        <!-- Estado del Bot -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">toggle_on</span> Estado del Bot
+          </h3>
+          <div class="flex items-center gap-4">
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="wa-bot-active" class="sr-only peer" onchange="toggleBotActive()"/>
+              <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+            </label>
+            <span id="wa-bot-status-label" class="text-sm text-charcoal/70">Bot activo</span>
+          </div>
+        </div>
+
+        <!-- Mensaje de Bienvenida -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">waving_hand</span> Mensaje de Bienvenida
+          </h3>
+          <div class="mb-3">
+            <label class="block text-sm mb-1 text-charcoal/60">Texto de saludo</label>
+            <textarea id="wa-saludo-texto" rows="2" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none text-sm"></textarea>
+          </div>
+          <div class="mb-3">
+            <label class="block text-sm mb-1 text-charcoal/60">Menu de comandos</label>
+            <textarea id="wa-menu-texto" rows="6" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none text-sm font-mono"></textarea>
+          </div>
+          <button onclick="saveBotMessages()" class="bg-primary text-on-primary px-4 py-2 rounded-lg hover:opacity-90 transition text-sm">Guardar Mensajes</button>
+        </div>
+
+        <!-- Comandos Habilitados -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">settings</span> Comandos Habilitados
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" id="cmd-stock" onchange="toggleComando('comando_stock')" class="w-4 h-4 accent-primary"/>
+              <span class="text-sm">stock — Ver mobiliario disponible</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" id="cmd-disponible" onchange="toggleComando('comando_disponible')" class="w-4 h-4 accent-primary"/>
+              <span class="text-sm">disponible [fecha] — Consultar disponibilidad</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" id="cmd-eventos" onchange="toggleComando('comando_eventos')" class="w-4 h-4 accent-primary"/>
+              <span class="text-sm">eventos — Tus eventos próximos</span>
+            </label>
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" id="cmd-presupuesto" onchange="toggleComando('comando_presupuesto')" class="w-4 h-4 accent-primary"/>
+              <span class="text-sm">presupuesto — Pedir presupuesto</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Recordatorios -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark mb-6">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">notifications</span> Recordatorios Automaticos
+          </h3>
+          <div class="flex items-center gap-3 mb-3">
+            <label class="text-sm text-charcoal/70">Recordar al cliente</label>
+            <input id="wa-recordatorio-hs" type="number" min="1" max="336" class="w-20 border border-ivory-dark rounded-lg p-2 text-center focus:border-primary outline-none"/>
+            <label class="text-sm text-charcoal/70">horas antes del evento</label>
+          </div>
+          <button onclick="saveRecordatorio()" class="bg-primary text-on-primary px-4 py-2 rounded-lg hover:opacity-90 transition text-sm">Guardar</button>
+        </div>
+
+        <!-- Probar Bot -->
+        <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark">
+          <h3 class="font-display text-lg mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">send</span> Enviar Mensaje de Prueba
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm mb-1 text-charcoal/60">Numero (ej: 5492323346385)</label>
+              <input id="wa-test-numero" type="text" placeholder="549..." class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
+            </div>
+            <div>
+              <label class="block text-sm mb-1 text-charcoal/60">Mensaje</label>
+              <input id="wa-test-texto" type="text" placeholder="Hola, esto es una prueba" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
+            </div>
+          </div>
+          <button onclick="sendTestMessage()" class="mt-4 border border-primary text-primary px-4 py-2 rounded-lg hover:bg-primary/10 transition text-sm">Enviar Prueba</button>
+          <div id="wa-test-result" class="mt-2 text-xs text-charcoal/50 hidden"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal -->
+  <div id="modal-overlay" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center p-4" onclick="if(event.target===this)closeModal()">
+    <div class="bg-ivory rounded-xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6" id="modal-content"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/calendario.js"></script>
+  <script src="js/eventos.js"></script>
+  <script src="js/mobiliario.js"></script>
+  <script src="js/clientes.js"></script>
+  <script src="js/presupuestos.js"></script>
+  <script src="js/finanzas.js"></script>
+  <script src="js/whatsapp.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

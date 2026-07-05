@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Base de datos
+data/
+
+# Env
+.env
+.env.bak
+
+# Uploads (fotos de mobiliario)
+uploads/
+
+# Backups
+backups/
+*.pre-restore*
+
+# Tests
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
