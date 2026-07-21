@@ -374,18 +374,20 @@ def presupuesto_pdf_completo(ppto_id: int, db: Session = Depends(get_db)):
     p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
     mob_prices = _lookup_mob_prices(db)
     mob_fotos = _lookup_mob_fotos(db)
-    buf = generate_pdf_completo(ppto, lugares_raw, mob_prices, mob_fotos)
-    return StreamingResponse(buf, media_type="application/pdf",
-                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.pdf"'})
+    from app.word_gen import generate_word_completo
+    buf = generate_word_completo(ppto, lugares_raw, mob_prices, mob_fotos)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.docx"'})
 
 
 @router.get("/{ppto_id}/pdf/cliente")
 def presupuesto_pdf_cliente(ppto_id: int, db: Session = Depends(get_db)):
     p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
     mob_fotos = _lookup_mob_fotos(db)
-    buf = generate_pdf_cliente(ppto, lugares_raw, mob_fotos)
-    return StreamingResponse(buf, media_type="application/pdf",
-                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.pdf"'})
+    from app.word_gen import generate_word_cliente
+    buf = generate_word_cliente(ppto, lugares_raw, mob_fotos)
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.docx"'})
 
 
 @router.get("/{ppto_id}/pdf/empleados")
@@ -548,6 +550,10 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
 
     from app.routers.eventos import _recalcular_evento
     _recalcular_evento(evento, db)
+    # Forzar que SQLAlchemy persista el monto_total recalculado
+    db.flush()
+    # Reasignar para forzar dirty flag y que commit() lo guarde
+    evento.monto_total = sum(em.cantidad * em.precio_unitario for em in db.query(EventoMobiliario).filter(EventoMobiliario.evento_id == evento.id).all()) + evento.costo_traslado + (evento.costo_mano_obra or 0)
 
     p.evento_id = evento.id
     p.estado = "confirmado"

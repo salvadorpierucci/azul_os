@@ -83,9 +83,9 @@ window.verPresupuestoDetalle = async function(id) {
       <button onclick="convertirPresupuestoEvento(${p.id})" class="bg-green-50 text-green-700 px-3 py-2 rounded-lg hover:bg-green-100 transition text-sm flex items-center justify-center gap-1"><span class="material-symbols-outlined text-base">event</span> Convertir en Evento</button>
     </div>
     <div class="mt-3 flex flex-wrap gap-2 border-t border-ivory-dark pt-3">
-      <span class="text-xs text-charcoal/40 self-center mr-1">PDF:</span>
-      <a href="${BASE_URL}/api/presupuestos/${p.id}/pdf/completo" target="_blank" class="px-3 py-1.5 bg-ivory-dark rounded-lg text-xs font-medium hover:bg-ivory transition flex items-center gap-1"><span class="material-symbols-outlined text-sm">picture_as_pdf</span> Completo</a>
-      <a href="${BASE_URL}/api/presupuestos/${p.id}/pdf/cliente" target="_blank" class="px-3 py-1.5 bg-ivory-dark rounded-lg text-xs font-medium hover:bg-ivory transition flex items-center gap-1"><span class="material-symbols-outlined text-sm">picture_as_pdf</span> Cliente</a>
+      <span class="text-xs text-charcoal/40 self-center mr-1">Descargar:</span>
+      <a href="${BASE_URL}/api/presupuestos/${p.id}/pdf/completo" target="_blank" class="px-3 py-1.5 bg-ivory-dark rounded-lg text-xs font-medium hover:bg-ivory transition flex items-center gap-1"><span class="material-symbols-outlined text-sm">description</span> Completo</a>
+      <a href="${BASE_URL}/api/presupuestos/${p.id}/pdf/cliente" target="_blank" class="px-3 py-1.5 bg-ivory-dark rounded-lg text-xs font-medium hover:bg-ivory transition flex items-center gap-1"><span class="material-symbols-outlined text-sm">description</span> Cliente</a>
       <a href="${BASE_URL}/api/presupuestos/${p.id}/pdf/empleados" target="_blank" class="px-3 py-1.5 bg-ivory-dark rounded-lg text-xs font-medium hover:bg-ivory transition flex items-center gap-1"><span class="material-symbols-outlined text-sm">picture_as_pdf</span> Empleados</a>
     </div>`);
 };
@@ -253,8 +253,9 @@ function _renderPptoModal(editData) {
       <div><label class="block text-sm mb-1 font-medium">Invitados</label><input id="nppto-invitados" type="number" min="0" value="${p.cantidad_invitados || ''}" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
       <div><label class="block text-sm mb-1 font-medium">Localidad</label><input id="nppto-localidad" value="${p.localidad || ''}" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
       <div><label class="block text-sm mb-1 font-medium">Distancia (km)</label><input id="nppto-distancia" type="number" min="0" step="0.1" value="${p.distancia_km || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
+      <div><label class="block text-sm mb-1 font-medium">Precio $/km</label><input id="nppto-precio-km" type="number" min="0" step="100" value="${_pptoPrecioKm || 7000}" placeholder="7000" oninput="_pptoPrecioKm=parseFloat(this.value)||7000;_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
     </div>
-    <div class="flex items-center gap-2 text-xs text-charcoal/40">Costo logística: $<span id="nppto-logistica-cost">0</span> (a $<span id="nppto-km-rate">7.000</span>/km) — <label class="flex items-center gap-1 cursor-pointer">Editar: <input id="nppto-precio-km" type="number" min="0" step="100" value="${_pptoPrecioKm || ''}" placeholder="7000" oninput="_pptoPrecioKm=parseFloat(this.value)||7000;_actualizarTotalesPpto()" class="w-24 border border-ivory-dark rounded-lg p-1 text-xs focus:border-primary outline-none"/></label></div>
+    <div class="text-xs text-charcoal/40">Costo logística: $<span id="nppto-logistica-cost">0</span> (a $<span id="nppto-km-rate">7.000</span>/km)</div>
     <div><h4 class="font-medium text-sm mb-2 text-charcoal/70">Lugares y Mobiliario</h4><div id="nppto-lugares" class="space-y-3">${lugaresHtml}</div>
     <button type="button" onclick="_addLugar()" class="mt-2 text-sm text-primary hover:underline flex items-center gap-1"><span class="material-symbols-outlined text-sm">add</span> Agregar lugar</button></div>
     <div id="nppto-totales" class="mt-4 border-t border-ivory-dark pt-3 text-sm space-y-1"></div>
