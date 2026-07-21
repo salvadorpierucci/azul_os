@@ -7,6 +7,7 @@ Contiene:
 - 3 generadores: completo (owner), cliente, empleados
 """
 import io
+import os
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm, cm
 from reportlab.lib.colors import HexColor, black, white
@@ -14,7 +15,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    HRFlowable, PageBreak, KeepTogether,
+    HRFlowable, PageBreak, KeepTogether, Image as RLImage,
 )
 
 
@@ -153,16 +154,28 @@ def _footer_block(st) -> list:
 # ════════════════════════════════════════════════════════════════
 # PDF COMPLETO (OWNER) — all details + prices
 # ════════════════════════════════════════════════════════════════
-def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) -> io.BytesIO:
+def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict, mob_fotos: dict = None) -> io.BytesIO:
     st = _get_base_styles()
+    mob_fotos = mob_fotos or {}
     story = []
     story.extend(_header_block(st, ppto_data))
+
+    # Helper para crear miniatura de foto
+    def _foto_cell(key):
+        path = mob_fotos.get(key)
+        if path and os.path.exists(path):
+            try:
+                img = RLImage(path, width=1.6 * cm, height=1.6 * cm)
+                return img
+            except Exception:
+                return Paragraph("", st["cell"])
+        return Paragraph("", st["cell"])
 
     all_table_data = []
     for lugar in lugares_raw:
         all_table_data.append([
             Paragraph(f"<b>{lugar.get('nombre', 'General')}</b>", st["cell_bold"]),
-            "", "", "", "",
+            "", "", "", "", "",
         ])
         productos = lugar.get("productos", [])
         for prod in productos:
@@ -173,6 +186,7 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
             subtotal_item = precio_unit * qty
             notas = prod.get("notas", "")
             all_table_data.append([
+                _foto_cell(key),
                 Paragraph(key, st["cell"]),
                 Paragraph(str(qty), st["cell_right"]),
                 Paragraph(_fmt_money(precio_unit), st["cell_right"]),
@@ -187,18 +201,19 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
         )
         all_table_data.append([
             Paragraph(f"<b>Subtotal {lugar.get('nombre', 'General')}</b>", st["cell_bold"]),
-            "", "",
+            "", "", "",
             Paragraph(f"<b>{_fmt_money(subtotal_lugar)}</b>", st["cell_bold_right"]),
             "",
         ])
 
     if not all_table_data:
-        all_table_data.append([Paragraph("Sin items", st["cell"]), "", "", "", ""])
+        all_table_data.append([Paragraph("", st["cell"]), Paragraph("Sin items", st["cell"]), "", "", "", ""])
 
     # Header row
     hdr_style = ParagraphStyle("hdr", parent=st["cell_bold"], textColor=white)
     hdr_r = ParagraphStyle("hdr_r", parent=st["cell_bold"], textColor=white, alignment=TA_RIGHT)
     all_table_data.insert(0, [
+        Paragraph("<b>Foto</b>", hdr_style),
         Paragraph("<b>Item</b>", hdr_style),
         Paragraph("<b>Cant.</b>", hdr_r),
         Paragraph("<b>P.Unit.</b>", hdr_r),
@@ -206,7 +221,7 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
         Paragraph("<b>Notas</b>", hdr_style),
     ])
 
-    col_w = [5.5 * cm, 1.8 * cm, 2.5 * cm, 2.5 * cm, 4 * cm]
+    col_w = [1.8 * cm, 4.5 * cm, 1.5 * cm, 2.3 * cm, 2.3 * cm, 4 * cm]
     items_table = Table(all_table_data, colWidths=col_w, repeatRows=1)
 
     style_cmds = [
@@ -222,7 +237,7 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
     current_row = 1
     for lugar in lugares_raw:
         style_cmds.append(("BACKGROUND", (0, current_row), (-1, current_row), LIGHT_GOLD))
-        style_cmds.append(("SPAN", (0, current_row), (1, current_row)))
+        style_cmds.append(("SPAN", (0, current_row), (-1, current_row)))
         current_row += 1
         n_products = len(lugar.get("productos", []))
         for i in range(n_products):
@@ -230,11 +245,11 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
                 style_cmds.append(("BACKGROUND", (0, current_row + i), (-1, current_row + i), HexColor("#f9f9f9")))
         current_row += n_products
         style_cmds.append(("BACKGROUND", (0, current_row), (-1, current_row), LIGHT_NAVY))
-        style_cmds.append(("SPAN", (0, current_row), (2, current_row)))
+        style_cmds.append(("SPAN", (0, current_row), (3, current_row)))
         current_row += 1
 
     if len(lugares_raw) == 0:
-        style_cmds.append(("SPAN", (0, 1), (2, 1)))
+        style_cmds.append(("SPAN", (0, 1), (3, 1)))
 
     items_table.setStyle(TableStyle(style_cmds))
     story.append(items_table)
@@ -278,27 +293,37 @@ def generate_pdf_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict) 
 # ════════════════════════════════════════════════════════════════
 # PDF CLIENTE — clean, elegant, no per-item prices
 # ════════════════════════════════════════════════════════════════
-def generate_pdf_cliente(ppto_data: dict, lugares_raw: list) -> io.BytesIO:
+def generate_pdf_cliente(ppto_data: dict, lugares_raw: list, mob_fotos: dict = None) -> io.BytesIO:
     st = _get_base_styles()
+    mob_fotos = mob_fotos or {}
     story = []
     story.extend(_header_block(st, ppto_data))
+
+    def _foto_cell(key):
+        path = mob_fotos.get(key)
+        if path and os.path.exists(path):
+            try:
+                return RLImage(path, width=1.6 * cm, height=1.6 * cm)
+            except Exception:
+                return Paragraph("", st["cell"])
+        return Paragraph("", st["cell"])
 
     table_data = []
     hdr_style = ParagraphStyle("cl_hdr", parent=st["cell_bold"], textColor=white, fontSize=9)
     hdr_r = ParagraphStyle("cl_hdr_r", parent=st["cell_bold"], textColor=white, fontSize=9, alignment=TA_RIGHT)
-    table_data.append([Paragraph("<b>Item</b>", hdr_style), Paragraph("<b>Cantidad</b>", hdr_r)])
+    table_data.append([Paragraph("<b>Foto</b>", hdr_style), Paragraph("<b>Item</b>", hdr_style), Paragraph("<b>Cantidad</b>", hdr_r)])
 
     for lugar in lugares_raw:
-        table_data.append([Paragraph(f"<b>{lugar.get('nombre', 'General')}</b>", st["cell_bold"]), ""])
+        table_data.append([Paragraph(f"<b>{lugar.get('nombre', 'General')}</b>", st["cell_bold"]), "", ""])
         for prod in lugar.get("productos", []):
             key = prod.get("catalogo_key", "")
             qty = prod.get("cantidad", 1)
-            table_data.append([Paragraph(key, st["cell"]), Paragraph(str(qty), st["cell_right"])])
+            table_data.append([_foto_cell(key), Paragraph(key, st["cell"]), Paragraph(str(qty), st["cell_right"])])
 
     if len(table_data) == 1:
-        table_data.append([Paragraph("Sin items", st["cell"]), ""])
+        table_data.append([Paragraph("", st["cell"]), Paragraph("Sin items", st["cell"]), ""])
 
-    col_w = [12 * cm, 4 * cm]
+    col_w = [1.8 * cm, 10.2 * cm, 4 * cm]
     items_table = Table(table_data, colWidths=col_w, repeatRows=1)
     style_cmds = [
         ("BACKGROUND", (0, 0), (-1, 0), NAVY),
@@ -313,7 +338,7 @@ def generate_pdf_cliente(ppto_data: dict, lugares_raw: list) -> io.BytesIO:
     current_row = 1
     for lugar in lugares_raw:
         style_cmds.append(("BACKGROUND", (0, current_row), (-1, current_row), LIGHT_GOLD))
-        style_cmds.append(("SPAN", (0, current_row), (1, current_row)))
+        style_cmds.append(("SPAN", (0, current_row), (-1, current_row)))
         current_row += 1 + len(lugar.get("productos", []))
 
     items_table.setStyle(TableStyle(style_cmds))

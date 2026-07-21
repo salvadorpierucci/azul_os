@@ -8,12 +8,14 @@ import os
 import secrets
 from dotenv import load_dotenv
 
-# Cargar .env desde ~/.config/azul-os/.env (fuera del árbol del repo)
-_env_path = os.path.expanduser("~/.config/azul-os/.env")
-if os.path.exists(_env_path):
-    load_dotenv(_env_path)
+# Cargar .env: primero backend/.env, luego ~/.config/azul-os/.env (Linux)
+_env_local = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+_env_home = os.path.expanduser("~/.config/azul-os/.env")
+if os.path.exists(_env_local):
+    load_dotenv(_env_local)
+elif os.path.exists(_env_home):
+    load_dotenv(_env_home)
 else:
-    # Fallback: backend/.env (backward compat)
     load_dotenv()
 
 from app.database import init_db
@@ -96,10 +98,17 @@ async def do_logout():
 def startup():
     init_db()
     # Backup automatico al iniciar (extra safety ante cortes de luz)
-    import subprocess
-    backup_script = os.path.join(PROJECT_ROOT, "scripts", "backup_db.sh")
-    if os.path.exists(backup_script):
+    # Usa backup_db.py si existe (cross-platform), sino backup_db.sh (Linux)
+    import subprocess, sys
+    backup_py = os.path.join(PROJECT_ROOT, "scripts", "backup_db.py")
+    backup_sh = os.path.join(PROJECT_ROOT, "scripts", "backup_db.sh")
+    if os.path.exists(backup_py):
         try:
-            subprocess.run([backup_script], capture_output=True, timeout=30)
+            subprocess.run([sys.executable, backup_py], capture_output=True, timeout=30)
         except Exception:
-            pass  # El backup no debe bloquear el inicio
+            pass
+    elif os.path.exists(backup_sh):
+        try:
+            subprocess.run([backup_sh], capture_output=True, timeout=30)
+        except Exception:
+            pass

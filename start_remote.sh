@@ -6,8 +6,7 @@
 # Cualquier persona puede acceder desde internet via la URL que muestra.
 # ============================================
 
-set -e
-
+# set -e desactivado: rompe el while-read del tunel cloudflared por heredar ERR traps
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "=== Azul OS - Iniciando con accesso remoto ==="

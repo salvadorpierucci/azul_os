@@ -9,8 +9,10 @@ import os, uuid, shutil
 
 router = APIRouter(prefix="/mobiliario", tags=["mobiliario"])
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# backend/app/routers/mobiliario.py → subir 4 niveles hasta repo root
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploads", "mobiliario")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 def _stock_disponible(item, db):

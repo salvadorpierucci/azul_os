@@ -1,0 +1,146 @@
+============================================================
+          AZUL OS — INSTALADOR WINDOWS 10/11
+          Sistema de Gestion para Azul Livings
+============================================================
+
+VERSION: 2026-07-13 (actualizada desde el repositorio)
+REQUISITOS: Windows 10 u 11 (64-bit), ~100 MB disco, internet para instalacion
+
+============================================================
+INSTALACION (2 pasos)
+============================================================
+
+  1. Descomprimi este ZIP en cualquier carpeta
+     (ej: C:\AzulOS o el Escritorio)
+
+  2. Doble-click en instalar.bat
+     El instalador hace TODO automaticamente:
+       - Instala Python 3.12 (si no esta)
+       - Crea entorno virtual e instala dependencias
+       - Inicializa la base de datos (conserva datos si ya existen)
+       - Configura backup automatico diario (03:00 AM)
+         con copia segura en caliente + compresion + rotacion
+       - Genera token de autenticacion + password "azul"
+       - Crea acceso directo en Escritorio y Menu Inicio
+
+============================================================
+INICIAR AZUL OS
+============================================================
+
+  - Doble-click en "Azul OS" en el Escritorio
+    -> Abre http://localhost:8000 en tu navegador
+    -> Te pide password: azul
+
+  Para detener: cerra la ventana negra del servidor.
+
+============================================================
+AUTENTICACION
+============================================================
+
+  - Ya viene configurada con token + password automatico
+  - Password por defecto: azul
+  - Para cambiar la password:
+      Edita backend\.env -> AZUL_AUTH_PASSWORD
+  - El token se genera aleatoriamente al instalar
+
+============================================================
+BACKUPS
+============================================================
+
+  Los backups usan sqlite3 .backup (copia en caliente segura).
+  No corrompen la base de datos aunque la app este escribiendo.
+
+  AUTOMATICO:
+    - Todos los dias a las 03:00 AM (Programador de Tareas)
+    - Tambien se hace backup al iniciar Azul OS
+    - 7 copias diarias + 4 semanales (domingos) + 3 mensuales (dia 1)
+    - Comprimidos con gzip (.db.gz)
+    - Log de actividad en backups\backup.log
+
+  RESTAURAR:
+    - Doble-click en scripts\restore_db.bat
+      -> Muestra los backups disponibles
+      -> scripts\restore_db.bat latest   (restaura el mas reciente)
+      -> scripts\restore_db.bat daily\archivo.db.gz
+
+  VERIFICACION:
+    - Antes de restaurar verifica la integridad del backup
+    - Hace copia previa de la DB actual (.pre-restore)
+
+============================================================
+CONFIGURAR WHATSAPP
+============================================================
+
+  Edita backend\.env con tus credenciales de Twilio:
+    TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    TWILIO_AUTH_TOKEN=********************************
+    TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+
+  Reinicia Azul OS para activar el bot.
+
+============================================================
+PROBAR QUE FUNCIONA
+============================================================
+
+  Abri una terminal en la carpeta de Azul OS y ejecuta:
+    venv\Scripts\activate.bat
+    cd backend
+    python -m pytest ..\tests\ -v
+
+  Deberian pasar los tests.
+
+============================================================
+ESTRUCTURA DE ARCHIVOS
+============================================================
+
+  azul-os\
+    ├── instalar.bat          ← Ejecutar UNA vez para instalar
+    ├── Iniciar Azul OS.bat   ← Launcher (creado por instalador)
+    ├── LEEME.txt             ← Este archivo
+    ├── backend\
+    │   ├── app\              ← Codigo Python (FastAPI)
+    │   ├── requirements.txt
+    │   ├── .env.example
+    │   └── .env              ← Configuracion (creado por instalador)
+    ├── frontend\             ← HTML + CSS + JavaScript
+    ├── scripts\
+    │   ├── backup_db.py      ← Backup (Python cross-platform)
+    │   ├── backup_db.bat     ← Wrapper para Windows
+    │   └── restore_db.bat    ← Restaurar backups
+    ├── data\
+    │   └── azul_os.db        ← Base de datos SQLite
+    ├── backups\              ← Backups diarios/semanales/mensuales
+    ├── tests\                ← Tests automatizados
+    ├── uploads\              ← Fotos de mobiliario
+    └── alembic\              ← Migraciones de base de datos
+
+============================================================
+PREGUNTAS FRECUENTES
+============================================================
+
+  P: ¿Puedo mover la carpeta azul-os a otro lugar?
+  R: Si, pero volve a ejecutar instalar.bat para regenerar
+     los accesos directos. Los datos se conservan.
+
+  P: ¿Puedo acceder desde otra PC en mi casa?
+  R: Si, edita backend\.env -> AZUL_CORS_ORIGINS y agrega
+     http://192.168.x.x:8000 (la IP de tu PC). Despues accede
+     desde el navegador de la otra PC a esa IP.
+
+  P: ¿Como actualizo a una version nueva?
+  R: Descomprimi el ZIP nuevo encima de la carpeta existente,
+     ejecuta instalar.bat de nuevo (conserva la DB y .env),
+     y listo.
+
+  P: ¿El servidor tiene que estar con la ventana abierta?
+  R: Si. Es un servidor local. Cerra la ventana = se apaga.
+     Para tenerlo siempre corriendo sin ventana, ejecuta:
+       venv\Scripts\pythonw.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+     desde la carpeta backend (sin ventana visible).
+
+============================================================
+CREDITOS
+============================================================
+  Azul OS — Sistema de gestion para Azul Livings Lujan
+  Desarrollado por sathel
+  Tecnologia: FastAPI + SQLite + JavaScript vanilla

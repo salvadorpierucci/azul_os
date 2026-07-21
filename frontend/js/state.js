@@ -20,6 +20,7 @@ let _nuevoPptoLugares = [];
 let _nuevoPptoClientes = [];
 let _nuevoPptoMobiliario = [];
 let _nuevoPptoEditingId = null;
+let _pptoPrecioKm = null;  // se carga del backend al abrir el modal
 let _finanzasPresupuestos = [];
 
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];

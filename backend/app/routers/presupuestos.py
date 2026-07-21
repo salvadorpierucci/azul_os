@@ -357,11 +357,24 @@ def _lookup_mob_prices(db: Session) -> dict:
     return {m.nombre: m.precio_alquiler for m in all_mob}
 
 
+def _lookup_mob_fotos(db: Session) -> dict:
+    """Retorna {nombre_mobiliario: ruta_absoluta_foto} para los que tienen foto."""
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    upload_dir = os.path.join(project_root, "uploads", "mobiliario")
+    all_mob = db.query(Mobiliario).filter(Mobiliario.activo == True).all()
+    fotos = {}
+    for m in all_mob:
+        if m.foto_path:
+            fotos[m.nombre] = os.path.join(upload_dir, m.foto_path)
+    return fotos
+
+
 @router.get("/{ppto_id}/pdf/completo")
 def presupuesto_pdf_completo(ppto_id: int, db: Session = Depends(get_db)):
     p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
     mob_prices = _lookup_mob_prices(db)
-    buf = generate_pdf_completo(ppto, lugares_raw, mob_prices)
+    mob_fotos = _lookup_mob_fotos(db)
+    buf = generate_pdf_completo(ppto, lugares_raw, mob_prices, mob_fotos)
     return StreamingResponse(buf, media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.pdf"'})
 
@@ -369,7 +382,8 @@ def presupuesto_pdf_completo(ppto_id: int, db: Session = Depends(get_db)):
 @router.get("/{ppto_id}/pdf/cliente")
 def presupuesto_pdf_cliente(ppto_id: int, db: Session = Depends(get_db)):
     p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
-    buf = generate_pdf_cliente(ppto, lugares_raw)
+    mob_fotos = _lookup_mob_fotos(db)
+    buf = generate_pdf_cliente(ppto, lugares_raw, mob_fotos)
     return StreamingResponse(buf, media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.pdf"'})
 
@@ -522,11 +536,13 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
                 key = prod.get("catalogo_key", "")
                 mob = mob_by_nombre.get(key)
             if mob:
+                # Usar precio ajustado por mes (mismo criterio que el presupuesto)
+                precio_ajustado = calcular_precio_ajustado(mob.precio_alquiler, p.fecha_evento)
                 em = EventoMobiliario(
                     evento_id=evento.id,
                     mobiliario_id=mob.id,
                     cantidad=prod.get("cantidad", 1),
-                    precio_unitario=mob.precio_alquiler,
+                    precio_unitario=precio_ajustado,
                 )
                 db.add(em)
 
