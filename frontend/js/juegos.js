@@ -13,7 +13,7 @@ async function loadJuegos() {
 }
 
 function renderJuegos() {
-  const cont = document.getElementById("page-content");
+  const cont = document.getElementById("juegos-container");
   if (!cont) return;
   const juegos = _juegosList;
   const cardsHtml = juegos.length === 0
