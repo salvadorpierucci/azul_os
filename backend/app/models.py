@@ -34,6 +34,20 @@ class Mobiliario(Base):
     updated_at = Column(DateTime, onupdate=func.now())
 
 
+# ─── Juego (combo de N unidades de un mobiliario) ───
+class Juego(Base):
+    __tablename__ = "juego"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(150), nullable=False)  # ej: "Juego Caña Bior 9p"
+    mobiliario_id = Column(Integer, ForeignKey("mobiliario.id"), nullable=False)
+    cantidad = Column(Integer, nullable=False, default=1)  # cuántas unidades agrupa
+    precio_alquiler = Column(Float, nullable=False, default=0.0)  # precio del juego completo
+    descripcion = Column(Text, default="")
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+
 # ─── Cliente ───
 class Cliente(Base):
     __tablename__ = "cliente"
@@ -123,7 +137,8 @@ class Presupuesto(Base):
     solo_ambientacion = Column(Boolean, default=False)
     lugares_json = Column(Text, default="[]")  # JSON serializado: [{nombre, productos}]
     subtotal_mobiliario = Column(Float, default=0.0)
-    costo_logistica = Column(Float, default=0.0)
+    costo_logistica = Column(Float, default=0.0)  # traslado
+    costo_armado = Column(Float, default=0.0)  # armado y desarme
     total = Column(Float, default=0.0)
     whatsapp_text = Column(Text, default="")
     estado = Column(String(30), default="borrador")  # borrador, enviado, confirmado, cancelado

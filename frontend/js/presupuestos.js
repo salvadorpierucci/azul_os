@@ -53,9 +53,15 @@ window.verPresupuestoDetalle = async function(id) {
   if (p.lugares && p.lugares.length > 0) {
     lugaresHtml = `<div class="mt-4 border-t border-ivory-dark pt-4"><h4 class="font-medium mb-3 text-sm uppercase text-charcoal/50 tracking-wider">Mobiliario por Lugar</h4><div class="space-y-4">`;
     p.lugares.forEach(lug => {
+      const items = lug.productos || lug.items || [];
       lugaresHtml += `<div class="bg-ivory-dark/30 rounded-lg p-3"><p class="font-medium text-sm text-navy mb-2">${lug.nombre || "Sin nombre"}</p><div class="space-y-1">`;
-      if (lug.items && lug.items.length > 0) {
-        lug.items.forEach(it => { lugaresHtml += `<div class="flex justify-between text-sm py-1 border-b border-ivory-dark/50 last:border-0"><span>${it.cantidad}x ${it.nombre || "Mobiliario"}</span><span class="font-medium">$${(it.subtotal || 0).toLocaleString("es-AR")}</span></div>`; });
+      if (items.length > 0) {
+        items.forEach(it => {
+          const nombre = it.nombre || it.catalogo_key || "Mobiliario";
+          const cant = it.cantidad || 1;
+          const subtotal = it.subtotal || (cant * (it.precio_unitario || 0));
+          lugaresHtml += `<div class="flex justify-between text-sm py-1 border-b border-ivory-dark/50 last:border-0"><span>${cant}x ${nombre}</span><span class="font-medium">$${subtotal.toLocaleString("es-AR")}</span></div>`;
+        });
       } else { lugaresHtml += `<p class="text-sm text-charcoal/40">Sin items</p>`; }
       lugaresHtml += `</div></div>`;
     });
@@ -63,7 +69,7 @@ window.verPresupuestoDetalle = async function(id) {
   }
   const mc = document.getElementById("modal-content");
   mc.classList.remove("max-w-lg"); mc.classList.add("max-w-3xl");
-  showModal(`<h3 class="font-display text-xl mb-4">Presupuesto #${p.id}</h3>
+  showModal(`<h3 class="font-display text-xl mb-4">${p.cliente_nombre || "Presupuesto #" + p.id}</h3>
     <div class="space-y-2 text-sm">
       <div class="flex justify-between"><span class="text-charcoal/50">Cliente</span><span class="font-medium">${p.cliente_nombre || "—"}</span></div>
       <div class="flex justify-between"><span class="text-charcoal/50">Tipo de Evento</span><span>${p.tipo_evento || "—"}</span></div>
@@ -74,7 +80,8 @@ window.verPresupuestoDetalle = async function(id) {
     </div>${lugaresHtml}
     <div class="mt-4 border-t border-ivory-dark pt-3 text-sm space-y-1">
       <div class="flex justify-between"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${(p.subtotal_mobiliario || 0).toLocaleString("es-AR")}</span></div>
-      <div class="flex justify-between"><span class="text-charcoal/50">Logística${p.distancia_km ? " (" + p.distancia_km + "km)" : ""}</span><span>$${(p.costo_logistica || 0).toLocaleString("es-AR")}</span></div>
+      <div class="flex justify-between"><span class="text-charcoal/50">Traslado${p.distancia_km ? " (" + p.distancia_km + "km)" : ""}</span><span>$${(p.costo_logistica || 0).toLocaleString("es-AR")}</span></div>
+      ${(p.costo_armado || 0) > 0 ? `<div class="flex justify-between"><span class="text-charcoal/50">Armado y desarme</span><span>$${(p.costo_armado || 0).toLocaleString("es-AR")}</span></div>` : ""}
       <div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${(p.total || 0).toLocaleString("es-AR")}</span></div>
     </div>
     <div class="mt-5 flex flex-wrap gap-2">
@@ -164,13 +171,14 @@ function _calcularPptoLocal() {
   });
   let costoLog = 0;
   if (dist > 0) { costoLog = dist * (_pptoPrecioKm || 7000); }
-  return { subtotalMob, costoLog, total: subtotalMob + costoLog };
+  const costoArmado = parseFloat(document.getElementById("nppto-armado")?.value) || 0;
+  return { subtotalMob, costoLog, costoArmado, total: subtotalMob + costoLog + costoArmado };
 }
 
 function _actualizarTotalesPpto() {
   const calc = _calcularPptoLocal();
   const el = document.getElementById("nppto-totales");
-  if (el) { el.innerHTML = `<div class="flex justify-between text-sm"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${calc.subtotalMob.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Costo Logística</span><span>$${calc.costoLog.toLocaleString("es-AR")}</span></div><div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${calc.total.toLocaleString("es-AR")}</span></div>`; }
+  if (el) { el.innerHTML = `<div class="flex justify-between text-sm"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${calc.subtotalMob.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Traslado</span><span>$${calc.costoLog.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Armado y desarme</span><span>$${calc.costoArmado.toLocaleString("es-AR")}</span></div><div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${calc.total.toLocaleString("es-AR")}</span></div>`; }
   const dist = parseFloat(document.getElementById("nppto-distancia")?.value) || 0;
   let logCost = dist > 0 ? dist * (_pptoPrecioKm || 7000) : 0;
   const logLabel = document.getElementById("nppto-logistica-cost");
@@ -255,7 +263,8 @@ function _renderPptoModal(editData) {
       <div><label class="block text-sm mb-1 font-medium">Distancia (km)</label><input id="nppto-distancia" type="number" min="0" step="0.1" value="${p.distancia_km || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
       <div><label class="block text-sm mb-1 font-medium">Precio $/km</label><input id="nppto-precio-km" type="number" min="0" step="100" value="${_pptoPrecioKm || 7000}" placeholder="7000" oninput="_pptoPrecioKm=parseFloat(this.value)||7000;_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
     </div>
-    <div class="text-xs text-charcoal/40">Costo logística: $<span id="nppto-logistica-cost">0</span> (a $<span id="nppto-km-rate">7.000</span>/km)</div>
+    <div class="text-xs text-charcoal/40">Traslado: $<span id="nppto-logistica-cost">0</span> (a $<span id="nppto-km-rate">7.000</span>/km)</div>
+    <div class="mt-2"><label class="block text-sm mb-1 font-medium">Armado y desarme ($)</label><input id="nppto-armado" type="number" min="0" step="1000" value="${p.costo_armado || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none" placeholder="0"/></div>
     <div><h4 class="font-medium text-sm mb-2 text-charcoal/70">Lugares y Mobiliario</h4><div id="nppto-lugares" class="space-y-3">${lugaresHtml}</div>
     <button type="button" onclick="_addLugar()" class="mt-2 text-sm text-primary hover:underline flex items-center gap-1"><span class="material-symbols-outlined text-sm">add</span> Agregar lugar</button></div>
     <div id="nppto-totales" class="mt-4 border-t border-ivory-dark pt-3 text-sm space-y-1"></div>
@@ -292,6 +301,7 @@ window.guardarNuevoPresupuesto = async function(ev) {
     lugares,
     subtotal_mobiliario: calc.subtotalMob,
     costo_logistica: calc.costoLog,
+    costo_armado: calc.costoArmado,
     total: calc.total,
     whatsapp_text: "",
     estado: "borrador"
@@ -337,6 +347,7 @@ window.guardarEditarPresupuesto = async function(ev, id) {
     lugares,
     subtotal_mobiliario: calc.subtotalMob,
     costo_logistica: calc.costoLog,
+    costo_armado: calc.costoArmado,
     total: calc.total,
     whatsapp_text: "",
     estado: document.getElementById("nppto-estado")?.value || "borrador"

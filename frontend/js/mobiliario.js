@@ -1,6 +1,9 @@
 // ─── MOBILIARIO ───
+let _mobItemsCache = [];  // cache de items para no llamar a la API en cada búsqueda
+
 async function loadMobiliario() {
   const items = await apiGet("/mobiliario/");
+  _mobItemsCache = items;
   // Consultar disponibilidad si hay fecha seleccionada
   _mobDisponibilidadMap = {};
   if (mobFechaDisponibilidad) {
@@ -28,8 +31,11 @@ async function loadMobiliario() {
   }
 
   const filtered = mobFilter ? items.filter(i => i.categoria === mobFilter) : items;
+  const searched = mobSearchQuery
+    ? filtered.filter(i => (i.nombre || "").toLowerCase().includes(mobSearchQuery.toLowerCase()) || (i.categoria || "").toLowerCase().includes(mobSearchQuery.toLowerCase()))
+    : filtered;
   const grid = document.getElementById("mobiliario-grid");
-  grid.innerHTML = filtered.map(m => {
+  grid.innerHTML = searched.map(m => {
     const fotoUrl = m.foto_path ? `/uploads/mobiliario/${m.foto_path}` : "";
     // Stock a mostrar: si hay fecha, usar disponibilidad; sino stock total
     const stockDisp = mobFechaDisponibilidad
@@ -59,7 +65,53 @@ async function loadMobiliario() {
   }).join("");
 }
 
-window.setMobFilter = function(f) { mobFilter = f; loadMobiliario(); };
+window.setMobFilter = function(f) { mobFilter = f; _renderMobiliarioGrid(); };
+
+window.setMobSearchQuery = function(q) {
+  mobSearchQuery = q || "";
+  // Usar cache: filtrar en cliente sin llamar a la API
+  clearTimeout(window._mobSearchTimer);
+  window._mobSearchTimer = setTimeout(() => _renderMobiliarioGrid(), 150);
+};
+
+// Re-renderiza solo el grid usando el cache (sin llamar a la API)
+function _renderMobiliarioGrid() {
+  if (!_mobItemsCache || _mobItemsCache.length === 0) return;
+  const items = _mobItemsCache;
+  const filtered = mobFilter ? items.filter(i => i.categoria === mobFilter) : items;
+  const searched = mobSearchQuery
+    ? filtered.filter(i => (i.nombre || "").toLowerCase().includes(mobSearchQuery.toLowerCase()) || (i.categoria || "").toLowerCase().includes(mobSearchQuery.toLowerCase()))
+    : filtered;
+  const grid = document.getElementById("mobiliario-grid");
+  if (!grid) return;
+  grid.innerHTML = searched.map(m => {
+    const fotoUrl = m.foto_path ? `/uploads/mobiliario/${m.foto_path}` : "";
+    const stockDisp = mobFechaDisponibilidad
+      ? (typeof _mobDisponibilidadMap[m.id] === "number" ? _mobDisponibilidadMap[m.id] : m.stock_disponible)
+      : m.stock_disponible;
+    const stockClass = stockDisp <= 0 ? 'text-red-600 font-bold' : stockDisp <= 1 ? 'text-red-500' : 'text-green-600';
+    const stockLabel = mobFechaDisponibilidad
+      ? `Disp: ${stockDisp}/${m.stock_total}`
+      : `Stock: ${m.stock_disponible}/${m.stock_total}`;
+    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group">
+      <div class="h-32 bg-ivory-dark flex items-center justify-center overflow-hidden relative cursor-pointer" onclick="editMobiliario(${m.id})">
+        ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover"/>` : '<span class="material-symbols-outlined text-4xl text-charcoal/20">chair</span>'}
+        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+          <button onclick="event.stopPropagation();editMobiliario(${m.id})" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-primary hover:text-on-primary transition" title="Editar"><span class="material-symbols-outlined text-sm">edit</span></button>
+          <button onclick="event.stopPropagation();confirmarEliminarMobiliario(${m.id},'${m.nombre.replace(/'/g,"\\'")}')" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
+        </div>
+      </div>
+      <div class="p-3 cursor-pointer" onclick="editMobiliario(${m.id})">
+        <p class="font-medium text-sm truncate">${m.nombre}</p>
+        <p class="text-xs text-charcoal/50">${m.categoria}</p>
+        <div class="flex justify-between mt-2 items-center">
+          <span class="text-sm font-display text-navy">$${m.precio_alquiler?.toLocaleString("es-AR")}</span>
+          <span class="text-xs ${stockClass}">${stockLabel}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
 
 window.setMobFechaDisponibilidad = function(fecha) {
   mobFechaDisponibilidad = fecha || "";

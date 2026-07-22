@@ -19,7 +19,7 @@ else:
     load_dotenv()
 
 from app.database import init_db
-from app.routers import mobiliario, eventos, finanzas, presupuestos, debug
+from app.routers import mobiliario, eventos, finanzas, presupuestos, debug, juegos
 from app.routers import whatsapp_twilio as whatsapp
 from app.auth import AuthMiddleware, login_endpoint, logout_endpoint, login_page
 
@@ -52,6 +52,7 @@ app.add_middleware(AuthMiddleware)
 
 # API routers
 app.include_router(mobiliario.router, prefix="/api")
+app.include_router(juegos.router, prefix="/api")
 app.include_router(eventos.router, prefix="/api")
 app.include_router(finanzas.router, prefix="/api")
 app.include_router(presupuestos.router, prefix="/api/presupuestos", tags=["Presupuestos"])

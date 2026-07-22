@@ -358,36 +358,54 @@ def _lookup_mob_prices(db: Session) -> dict:
 
 
 def _lookup_mob_fotos(db: Session) -> dict:
-    """Retorna {nombre_mobiliario: ruta_absoluta_foto} para los que tienen foto."""
+    """Retorna {nombre_mobiliario: ruta_absoluta_foto} para los que tienen foto.
+    Tolera que el directorio uploads/mobiliario no exista (otra PC sin fotos copiadas)."""
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     upload_dir = os.path.join(project_root, "uploads", "mobiliario")
+    if not os.path.isdir(upload_dir):
+        return {}
     all_mob = db.query(Mobiliario).filter(Mobiliario.activo == True).all()
     fotos = {}
     for m in all_mob:
         if m.foto_path:
-            fotos[m.nombre] = os.path.join(upload_dir, m.foto_path)
+            foto_path = os.path.join(upload_dir, m.foto_path)
+            if os.path.exists(foto_path):
+                fotos[m.nombre] = foto_path
     return fotos
 
 
 @router.get("/{ppto_id}/pdf/completo")
 def presupuesto_pdf_completo(ppto_id: int, db: Session = Depends(get_db)):
-    p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
-    mob_prices = _lookup_mob_prices(db)
-    mob_fotos = _lookup_mob_fotos(db)
-    from app.word_gen import generate_word_completo
-    buf = generate_word_completo(ppto, lugares_raw, mob_prices, mob_fotos)
-    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.docx"'})
+    try:
+        p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
+        mob_prices = _lookup_mob_prices(db)
+        mob_fotos = _lookup_mob_fotos(db)
+        from app.word_gen import generate_word_completo
+        buf = generate_word_completo(ppto, lugares_raw, mob_prices, mob_fotos)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                 headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.docx"'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error generando Word: {str(e)}")
 
 
 @router.get("/{ppto_id}/pdf/cliente")
 def presupuesto_pdf_cliente(ppto_id: int, db: Session = Depends(get_db)):
-    p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
-    mob_fotos = _lookup_mob_fotos(db)
-    from app.word_gen import generate_word_cliente
-    buf = generate_word_cliente(ppto, lugares_raw, mob_fotos)
-    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                             headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.docx"'})
+    try:
+        p, lugares_raw, ppto = _get_ppto_with_lugares(ppto_id, db)
+        mob_fotos = _lookup_mob_fotos(db)
+        from app.word_gen import generate_word_cliente
+        buf = generate_word_cliente(ppto, lugares_raw, mob_fotos)
+        return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                                 headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.docx"'})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(500, f"Error generando Word: {str(e)}")
+
+
+
 
 
 @router.get("/{ppto_id}/pdf/empleados")
@@ -441,6 +459,7 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
         lugares_json=json.dumps([l.model_dump() for l in data.lugares]),
         subtotal_mobiliario=data.subtotal_mobiliario,
         costo_logistica=data.costo_logistica,
+        costo_armado=data.costo_armado,
         total=data.total,
         whatsapp_text=data.whatsapp_text,
         estado=data.estado,
@@ -466,6 +485,7 @@ def actualizar_presupuesto(ppto_id: int, data: PresupuestoSave, db: Session = De
     p.lugares_json = json.dumps([l.model_dump() for l in data.lugares])
     p.subtotal_mobiliario = data.subtotal_mobiliario
     p.costo_logistica = data.costo_logistica
+    p.costo_armado = data.costo_armado
     p.total = data.total
     p.whatsapp_text = data.whatsapp_text
     p.estado = data.estado
@@ -517,7 +537,8 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
         estado="reserva",
         estado_pago="pendiente",
         costo_traslado=p.costo_logistica,
-        monto_total=p.subtotal_mobiliario + p.costo_logistica,
+        costo_mano_obra=p.costo_armado or 0.0,
+        monto_total=p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0),
     )
     db.add(evento)
     db.commit()
@@ -577,6 +598,7 @@ def _presupuesto_to_out(p: Presupuesto) -> PresupuestoDBOut:
         lugares=lugares,
         subtotal_mobiliario=p.subtotal_mobiliario,
         costo_logistica=p.costo_logistica,
+        costo_armado=p.costo_armado or 0.0,
         total=p.total,
         whatsapp_text=p.whatsapp_text,
         estado=p.estado,

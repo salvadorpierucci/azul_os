@@ -48,7 +48,7 @@ def _header_block(doc, ppto_data: dict, subtitle: str):
     info_data = [
         ("Cliente:", ppto_data.get("cliente_nombre") or "—", "Fecha evento:", ppto_data.get("fecha_evento") or "—"),
         ("Tipo:", ppto_data.get("tipo_evento") or "—", "Invitados:", str(ppto_data.get("cantidad_invitados") or "—")),
-        ("Localidad:", ppto_data.get("localidad") or "—", "Logística:", "—"),
+        ("Localidad:", ppto_data.get("localidad") or "—", "Traslado:", _fmt_money(ppto_data.get("costo_logistica") or 0)),
     ]
     for row_idx, (l1, v1, l2, v2) in enumerate(info_data):
         cells = info.rows[row_idx].cells
@@ -67,11 +67,30 @@ def _totales_block(doc, ppto_data: dict, show_mobiliario: bool = False):
         r.font.size = Pt(10)
         tot_para.paragraph_format.space_after = Pt(2)
 
-    if ppto_data.get("costo_logistica") and ppto_data["costo_logistica"] > 0:
-        log_para = doc.add_paragraph()
-        r = log_para.add_run(f"Flete / Traslado: {_fmt_money(ppto_data['costo_logistica'])}")
-        r.font.size = Pt(10)
-        log_para.paragraph_format.space_after = Pt(2)
+    # Sección Logística: Traslado + Armado/Desarme
+    costo_traslado = ppto_data.get("costo_logistica") or 0
+    costo_armado = ppto_data.get("costo_armado") or 0
+    if costo_traslado > 0 or costo_armado > 0:
+        log_header = doc.add_paragraph()
+        log_header.paragraph_format.space_before = Pt(4)
+        log_header.paragraph_format.space_after = Pt(2)
+        rh = log_header.add_run("Logística:")
+        rh.bold = True
+        rh.font.size = Pt(10)
+
+        if costo_traslado > 0:
+            sub_t = doc.add_paragraph()
+            sub_t.paragraph_format.left_indent = Pt(14)
+            sub_t.paragraph_format.space_after = Pt(1)
+            r = sub_t.add_run(f"• Traslado: {_fmt_money(costo_traslado)}")
+            r.font.size = Pt(10)
+
+        if costo_armado > 0:
+            sub_a = doc.add_paragraph()
+            sub_a.paragraph_format.left_indent = Pt(14)
+            sub_a.paragraph_format.space_after = Pt(1)
+            r = sub_a.add_run(f"• Armado y desarme: {_fmt_money(costo_armado)}")
+            r.font.size = Pt(10)
 
     total_para = doc.add_paragraph()
     total_para.paragraph_format.space_before = Pt(6)

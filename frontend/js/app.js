@@ -37,6 +37,7 @@ async function loadPageData(page, data) {
       case "calendario": await loadCalendario(); break;
       case "eventos": await loadEventos(); break;
       case "mobiliario": await loadMobiliario(); break;
+      case "juegos": await loadJuegos(); break;
       case "clientes": await loadClientes(); break;
       case "presupuestos": await loadPresupuestos(); break;
       case "finanzas": await loadFinanzas(); break;

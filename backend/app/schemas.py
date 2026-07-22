@@ -26,6 +26,31 @@ class MobiliarioOut(MobiliarioBase):
         from_attributes = True
 
 
+# ─── Juego (combo de N unidades de un mobiliario) ───
+class JuegoSave(BaseModel):
+    nombre: str
+    mobiliario_id: int
+    cantidad: int = 1
+    precio_alquiler: float = 0.0
+    descripcion: Optional[str] = ""
+    activo: bool = True
+
+class JuegoOut(JuegoSave):
+    id: int
+    mobiliario_nombre: str = ""
+    mobiliario_stock: int = 0
+    class Config:
+        from_attributes = True
+
+class JuegoUpdate(BaseModel):
+    nombre: Optional[str] = None
+    mobiliario_id: Optional[int] = None
+    cantidad: Optional[int] = None
+    precio_alquiler: Optional[float] = None
+    descripcion: Optional[str] = None
+    activo: Optional[bool] = None
+
+
 # ─── Cliente ───
 class ClienteBase(BaseModel):
     nombre: str
@@ -252,7 +277,8 @@ class PresupuestoSave(BaseModel):
     distancia_km: Optional[float] = None
     lugares: list[LugarPresupuesto] = []
     subtotal_mobiliario: float = 0.0
-    costo_logistica: float = 0.0
+    costo_logistica: float = 0.0  # traslado
+    costo_armado: float = 0.0  # armado y desarme
     total: float = 0.0
     whatsapp_text: str = ""
     estado: str = "borrador"
@@ -269,7 +295,8 @@ class PresupuestoDBOut(BaseModel):
     distancia_km: Optional[float] = None
     lugares: list[LugarPresupuesto] = []
     subtotal_mobiliario: float = 0.0
-    costo_logistica: float = 0.0
+    costo_logistica: float = 0.0  # traslado
+    costo_armado: float = 0.0  # armado y desarme
     total: float = 0.0
     whatsapp_text: str = ""
     estado: str = "borrador"

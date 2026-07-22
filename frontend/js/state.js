@@ -6,6 +6,7 @@ let clienteSearch = "";
 let pptoSearch = "";
 let pptoEstadoFilter = "";
 let mobFilter = "";
+let mobSearchQuery = "";  // texto de búsqueda en mobiliario
 let mobFechaDisponibilidad = "";  // YYYY-MM-DD; vacío = stock total
 let _mobDisponibilidadMap = {};   // { mobiliario_id: stock_disponible_para_fecha }
 let calYear, calMonth;
@@ -53,6 +54,7 @@ async function loadPageData(page, data) {
       case "calendario": await loadCalendario(); break;
       case "eventos": await loadEventos(); break;
       case "mobiliario": await loadMobiliario(); break;
+      case "juegos": await loadJuegos(); break;
       case "clientes": await loadClientes(); break;
       case "presupuestos": await loadPresupuestos(); break;
       case "finanzas": await loadFinanzas(); break;

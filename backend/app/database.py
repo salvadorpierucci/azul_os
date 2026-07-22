@@ -27,8 +27,24 @@ def get_db():
         db.close()
 
 
+def _migrate_add_columns():
+    """Agrega columnas nuevas a tablas existentes (SQLite ALTER TABLE ADD COLUMN).
+   _Idempotente: si la columna ya existe, no hace nada."""
+    from sqlalchemy import text, inspect
+    insp = inspect(engine)
+    # Tabla presupuesto: agregar costo_armado
+    if "presupuesto" in insp.get_table_names():
+        cols = [c["name"] for c in insp.get_columns("presupuesto")]
+        if "costo_armado" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE presupuesto ADD COLUMN costo_armado FLOAT DEFAULT 0.0"))
+
+
 def init_db():
+    # Importar todos los modelos para que Base.metadata los conozca antes de create_all
+    import app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    _migrate_add_columns()
     # Seed logística si no existe
     from app.models import LogisticaZona, LogisticaServicio, ConfigLogistica, ConfiguracionWhatsApp
     db = SessionLocal()
