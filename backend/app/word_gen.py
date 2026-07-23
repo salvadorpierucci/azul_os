@@ -273,10 +273,16 @@ def generate_word_completo(ppto_data: dict, lugares_raw: list, mob_prices: dict,
         _shade_cell(cell, "F5F0E8")
 
         for prod in lugar.get("productos", []):
-            key = prod.get("catalogo_key", "")
+            key = prod.get("catalogo_key", "") or prod.get("nombre", "")
             qty = prod.get("cantidad", 1)
-            precio_unit = mob_prices.get(key, 0)
-            subtotal = qty * precio_unit
+            # Usar precio guardado en el producto (calculado al guardar el presupuesto).
+            # Si no existe (presupuesto viejo), caer a mob_prices por catalogo_key.
+            precio_unit = prod.get("precio_unitario")
+            if precio_unit is None or precio_unit == 0:
+                precio_unit = mob_prices.get(key, 0)
+            subtotal = prod.get("subtotal")
+            if subtotal is None or subtotal == 0:
+                subtotal = qty * precio_unit
 
             row = tbl.add_row()
             row.cells[0].paragraphs[0].add_run(key).font.size = Pt(10)

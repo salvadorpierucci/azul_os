@@ -38,6 +38,9 @@ def _migrate_add_columns():
         if "costo_armado" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE presupuesto ADD COLUMN costo_armado FLOAT DEFAULT 0.0"))
+        if "nombre" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE presupuesto ADD COLUMN nombre VARCHAR(200) DEFAULT ''"))
 
 
 def init_db():

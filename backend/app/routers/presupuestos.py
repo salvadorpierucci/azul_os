@@ -20,6 +20,57 @@ from app.schemas import (
     PresupuestoSave, PresupuestoDBOut, LugarPresupuesto, ProductoLugar,
     ZonaOut, ServicioOut, LogisticaConfigOut,
 )
+
+
+def _enriquecer_productos_con_precios(lugares, db: Session, fecha_evento: str) -> list:
+    """Toma una lista de LugarPresupuesto (o dicts crudos) y devuelve una lista
+    de dicts con el JSON de cada lugar, agregando `precio_unitario` y `subtotal`
+    a cada producto, ya sea mobiliario o juego. Aplica el ajuste 3% mensual.
+    También inyecta `nombre` para que el frontend pueda mostrarlo si no está.
+    """
+    all_mob = db.query(Mobiliario).filter(Mobiliario.activo == True).all()
+    mob_by_id = {m.id: m for m in all_mob}
+    mob_by_nombre = {m.nombre: m for m in all_mob}
+    all_juegos = db.query(Juego).filter(Juego.activo == True).all()
+    juego_by_id = {j.id: j for j in all_juegos}
+
+    enriched = []
+    for lug in lugares:
+        lug_dict = {
+            "nombre": getattr(lug, "nombre", "") or (lug.get("nombre", "") if isinstance(lug, dict) else ""),
+            "productos": []
+        }
+        productos = getattr(lug, "productos", None) or (lug.get("productos", []) if isinstance(lug, dict) else [])
+        for prod in productos:
+            p = prod if isinstance(prod, dict) else prod.model_dump()
+            precio = 0.0
+            cantidad = p.get("cantidad", 1) or 1
+            if p.get("juego_id"):
+                juego = juego_by_id.get(p["juego_id"])
+                if juego:
+                    precio_base = p.get("precio_manual") if p.get("precio_manual") is not None else juego.precio_alquiler
+                    precio = calcular_precio_ajustado(precio_base, fecha_evento)
+            elif p.get("mobiliario_id"):
+                mob = mob_by_id.get(p["mobiliario_id"])
+                if not mob:
+                    key = p.get("catalogo_key", "")
+                    if key:
+                        mob = mob_by_nombre.get(key)
+                if mob:
+                    precio_base = p.get("precio_manual") if p.get("precio_manual") is not None else mob.precio_alquiler
+                    precio = calcular_precio_ajustado(precio_base, fecha_evento)
+            elif p.get("catalogo_key"):
+                mob = mob_by_nombre.get(p["catalogo_key"])
+                if mob:
+                    precio_base = p.get("precio_manual") if p.get("precio_manual") is not None else mob.precio_alquiler
+                    precio = calcular_precio_ajustado(precio_base, fecha_evento)
+            enriched_prod = dict(p)
+            enriched_prod["precio_unitario"] = precio
+            enriched_prod["subtotal"] = precio * cantidad
+            enriched_prod["nombre"] = p.get("catalogo_key", "") or p.get("nombre", "")
+            lug_dict["productos"].append(enriched_prod)
+        enriched.append(lug_dict)
+    return enriched
 from app.pdf_gen import (
     generate_pdf_completo, generate_pdf_cliente, generate_pdf_empleados,
 )
@@ -375,7 +426,11 @@ def _get_ppto_with_lugares(ppto_id: int, db: Session):
     if not p:
         raise HTTPException(404, "Presupuesto no encontrado")
     lugares_data = json.loads(p.lugares_json) if p.lugares_json else []
+    # Enriquecer productos con precios calculados (mobiliario + juegos)
+    # para que el Word y el frontend puedan mostrar precios sin recalcular.
+    lugares_data = _enriquecer_productos_con_precios(lugares_data, db, p.fecha_evento)
     ppto_dict = {
+        "nombre": getattr(p, 'nombre', '') or '',
         "cliente_nombre": p.cliente_nombre,
         "fecha_evento": p.fecha_evento,
         "tipo_evento": p.tipo_evento,
@@ -459,7 +514,7 @@ def presupuesto_pdf_empleados(ppto_id: int, db: Session = Depends(get_db)):
 @router.get("/", response_model=List[PresupuestoDBOut])
 def listar_presupuestos(db: Session = Depends(get_db)):
     presupuestos = db.query(Presupuesto).order_by(Presupuesto.created_at.desc()).all()
-    return [_presupuesto_to_out(p) for p in presupuestos]
+    return [_presupuesto_to_out(p, db) for p in presupuestos]
 
 
 @router.get("/{ppto_id}", response_model=PresupuestoDBOut)
@@ -467,7 +522,7 @@ def obtener_presupuesto(ppto_id: int, db: Session = Depends(get_db)):
     p = db.query(Presupuesto).filter(Presupuesto.id == ppto_id).first()
     if not p:
         raise HTTPException(404, "Presupuesto no encontrado")
-    return _presupuesto_to_out(p)
+    return _presupuesto_to_out(p, db)
 
 
 @router.post("/", response_model=PresupuestoDBOut)
@@ -489,9 +544,11 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
 
     # DEBUG: log fecha recibida
     import logging
-    logging.warning(f"DEBUG guardar_presupuesto: fecha_evento recibida = {data.fecha_evento!r}")
+    # Enriquecer JSON de lugares con precios calculados (mobiliario + juegos)
+    enriched_lugares = _enriquecer_productos_con_precios(data.lugares, db, data.fecha_evento)
 
     p = Presupuesto(
+        nombre=data.nombre,
         cliente_id=cliente_id,
         cliente_nombre=cliente_nombre,
         fecha_evento=data.fecha_evento,
@@ -499,7 +556,7 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
         cantidad_invitados=data.cantidad_invitados,
         localidad=data.localidad,
         distancia_km=data.distancia_km,
-        lugares_json=json.dumps([l.model_dump() for l in data.lugares]),
+        lugares_json=json.dumps(enriched_lugares),
         subtotal_mobiliario=data.subtotal_mobiliario,
         costo_logistica=data.costo_logistica,
         costo_armado=data.costo_armado,
@@ -510,7 +567,7 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
     db.add(p)
     db.commit()
     db.refresh(p)
-    return _presupuesto_to_out(p)
+    return _presupuesto_to_out(p, db)
 
 
 @router.put("/{ppto_id}", response_model=PresupuestoDBOut)
@@ -518,17 +575,17 @@ def actualizar_presupuesto(ppto_id: int, data: PresupuestoSave, db: Session = De
     p = db.query(Presupuesto).filter(Presupuesto.id == ppto_id).first()
     if not p:
         raise HTTPException(404, "Presupuesto no encontrado")
-    # DEBUG: log fecha recibida
-    import logging
-    logging.warning(f"DEBUG actualizar_presupuesto({ppto_id}): fecha_evento recibida = {data.fecha_evento!r}")
     p.cliente_id = data.cliente_id
+    p.nombre = data.nombre
     p.cliente_nombre = data.cliente_nombre
     p.fecha_evento = data.fecha_evento
     p.tipo_evento = data.tipo_evento
     p.cantidad_invitados = data.cantidad_invitados
     p.localidad = data.localidad
     p.distancia_km = data.distancia_km
-    p.lugares_json = json.dumps([l.model_dump() for l in data.lugares])
+    # Enriquecer JSON de lugares con precios calculados (mobiliario + juegos)
+    enriched_lugares = _enriquecer_productos_con_precios(data.lugares, db, data.fecha_evento)
+    p.lugares_json = json.dumps(enriched_lugares)
     p.subtotal_mobiliario = data.subtotal_mobiliario
     p.costo_logistica = data.costo_logistica
     p.costo_armado = data.costo_armado
@@ -537,7 +594,7 @@ def actualizar_presupuesto(ppto_id: int, data: PresupuestoSave, db: Session = De
     p.estado = data.estado
     db.commit()
     db.refresh(p)
-    return _presupuesto_to_out(p)
+    return _presupuesto_to_out(p, db)
 
 
 @router.delete("/{ppto_id}")
@@ -652,11 +709,24 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
 
 
 # ─── HELPERS ───
-def _presupuesto_to_out(p: Presupuesto) -> PresupuestoDBOut:
+def _presupuesto_to_out(p: Presupuesto, db: Session = None) -> PresupuestoDBOut:
     lugares_data = json.loads(p.lugares_json) if p.lugares_json else []
+    # Si los productos no tienen precio_unitario/subtotal (presupuestos viejos),
+    # enriquecerlos calculando los precios con la fecha del evento.
+    needs_enrich = False
+    for lug in lugares_data:
+        for prod in lug.get("productos", []):
+            if "precio_unitario" not in prod or "subtotal" not in prod:
+                needs_enrich = True
+                break
+        if needs_enrich:
+            break
+    if needs_enrich and db is not None:
+        lugares_data = _enriquecer_productos_con_precios(lugares_data, db, p.fecha_evento)
     lugares = [LugarPresupuesto(**l) for l in lugares_data]
     return PresupuestoDBOut(
         id=p.id,
+        nombre=getattr(p, 'nombre', '') or '',
         cliente_id=p.cliente_id,
         cliente_nombre=p.cliente_nombre,
         fecha_evento=p.fecha_evento,

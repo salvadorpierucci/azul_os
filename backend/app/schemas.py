@@ -242,6 +242,11 @@ class ProductoLugar(BaseModel):
     cantidad: int = 1
     notas: str = ""
     precio_manual: Optional[float] = None
+    # Campos calculados al guardar (se persisten en lugares_json para que
+    # el frontend y el Word puedan mostrar precios sin recalcular):
+    nombre: str = ""
+    precio_unitario: float = 0.0
+    subtotal: float = 0.0
 
 
 class LugarPresupuesto(BaseModel):
@@ -281,6 +286,7 @@ class PresupuestoAvanzadoResponse(BaseModel):
 
 # ─── Presupuesto Guardado ───
 class PresupuestoSave(BaseModel):
+    nombre: str = ""
     cliente_nombre: str = ""
     cliente_id: Optional[int] = None
     fecha_evento: str = ""
@@ -299,6 +305,7 @@ class PresupuestoSave(BaseModel):
 
 class PresupuestoDBOut(BaseModel):
     id: int
+    nombre: str = ""
     cliente_id: Optional[int] = None
     cliente_nombre: str = ""
     fecha_evento: str = ""

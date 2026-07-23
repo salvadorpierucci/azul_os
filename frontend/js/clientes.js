@@ -147,7 +147,7 @@ function renderClientePerfil() {
         const badge = _pptoEstadoBadge(p.estado);
         const fecha = p.fecha_evento ? (() => { const m = String(p.fecha_evento).match(/^(\d{4})-(\d{2})-(\d{2})/); const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
         return `<div class="flex items-center justify-between py-3 px-1 border-b border-ivory-dark/60 last:border-0 hover:bg-ivory-dark/30 rounded transition cursor-pointer" onclick="navigate('presupuestos');verPresupuestoDetalle(${p.id})">
-          <div class="min-w-0 flex-1"><p class="font-medium truncate">${p.tipo_evento || "Presupuesto"}</p><p class="text-xs text-charcoal/50">${fecha}</p></div>
+          <div class="min-w-0 flex-1"><p class="font-medium truncate">${p.nombre || p.tipo_evento || "Presupuesto"}</p><p class="text-xs text-charcoal/50">${fecha}</p></div>
           <div class="flex items-center gap-2 flex-shrink-0 ml-3"><span class="font-display text-sm text-navy">$${(p.total || 0).toLocaleString("es-AR")}</span><span class="text-xs px-2 py-1 rounded ${badge}">${p.estado || "borrador"}</span></div>
         </div>`;
       }).join("");

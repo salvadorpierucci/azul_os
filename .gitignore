@@ -8,6 +8,7 @@ venv/
 # Base de datos
 data/
 backend/azul.db
+backend/azuloos.db
 
 # Env
 .env

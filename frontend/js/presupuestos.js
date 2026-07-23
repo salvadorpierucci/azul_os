@@ -46,7 +46,7 @@ window.onPptoSearch = function(val) { pptoSearch = val.trim().toLowerCase(); ren
 function renderPresupuestosList() {
   let filtered = _presupuestosList;
   if (pptoEstadoFilter) filtered = filtered.filter(p => p.estado === pptoEstadoFilter);
-  if (pptoSearch) filtered = filtered.filter(p => (p.cliente_nombre || "").toLowerCase().includes(pptoSearch) || (p.tipo_evento || "").toLowerCase().includes(pptoSearch));
+  if (pptoSearch) filtered = filtered.filter(p => (p.nombre || "").toLowerCase().includes(pptoSearch) || (p.cliente_nombre || "").toLowerCase().includes(pptoSearch) || (p.tipo_evento || "").toLowerCase().includes(pptoSearch));
   const cont = document.getElementById("presupuestos-list");
   if (!cont) return;
   if (filtered.length === 0) {
@@ -57,11 +57,12 @@ function renderPresupuestosList() {
     const fecha = _fmtFecha(p.fecha_evento);
     const created = p.created_at ? new Date(p.created_at).toLocaleDateString("es-AR", { day:"2-digit", month:"short" }) : "";
     const badge = _pptoEstadoBadge(p.estado);
+    const displayNombre = p.nombre || `${p.cliente_nombre || "Presupuesto"} · ${p.tipo_evento || ""}`;
     return `<div class="bg-white rounded-lg shadow-sm border border-ivory-dark hover:shadow-md transition-shadow">
       <div class="p-4 flex items-center justify-between cursor-pointer" onclick="verPresupuestoDetalle(${p.id})">
         <div class="flex-1 min-w-0">
-          <p class="font-medium truncate">${p.cliente_nombre || "—"} <span class="text-charcoal/40 font-normal">· ${p.tipo_evento || ""}</span></p>
-          <div class="flex items-center gap-3 text-sm text-charcoal/60 mt-1"><span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">calendar_today</span>${fecha}</span>${created ? `<span class="text-xs text-charcoal/30">Creado ${created}</span>` : ''}</div>
+          <p class="font-medium truncate">${displayNombre}</p>
+          <div class="flex items-center gap-3 text-sm text-charcoal/60 mt-1"><span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">calendar_today</span>${fecha}</span>${p.cliente_nombre ? `<span class="text-xs text-charcoal/40">${p.cliente_nombre}</span>` : ''}${created ? `<span class="text-xs text-charcoal/30">· ${created}</span>` : ''}</div>
         </div>
         <div class="flex items-center gap-2 flex-shrink-0 ml-3"><span class="font-display text-navy">$${p.total?.toLocaleString("es-AR") || 0}</span><span class="text-xs px-2 py-1 rounded ${badge}">${p.estado || "borrador"}</span></div>
       </div>
@@ -93,8 +94,9 @@ window.verPresupuestoDetalle = async function(id) {
   }
   const mc = document.getElementById("modal-content");
   mc.classList.remove("max-w-lg"); mc.classList.add("max-w-3xl");
-  showModal(`<h3 class="font-display text-xl mb-4">${p.cliente_nombre || "Presupuesto #" + p.id}</h3>
+  showModal(`<h3 class="font-display text-xl mb-4">${p.nombre || p.cliente_nombre || "Presupuesto #" + p.id}</h3>
     <div class="space-y-2 text-sm">
+      ${p.nombre ? `<div class="flex justify-between"><span class="text-charcoal/50">Presupuesto</span><span class="font-medium">${p.nombre}</span></div>` : ""}
       <div class="flex justify-between"><span class="text-charcoal/50">Cliente</span><span class="font-medium">${p.cliente_nombre || "—"}</span></div>
       <div class="flex justify-between"><span class="text-charcoal/50">Tipo de Evento</span><span>${p.tipo_evento || "—"}</span></div>
       <div class="flex justify-between"><span class="text-charcoal/50">Fecha del Evento</span><span>${fecha}</span></div>
@@ -307,6 +309,7 @@ function _renderPptoModal(editData) {
   const submitAction = _nuevoPptoEditingId ? `guardarEditarPresupuesto(event, ${_nuevoPptoEditingId})` : `guardarNuevoPresupuesto(event)`;
   let lugaresHtml = "";
   showModal(`<h3 class="font-display text-xl mb-4">${titulo}</h3><form onsubmit="${submitAction}"><div class="space-y-3">
+    <div><label class="block text-sm mb-1 font-medium">Nombre del presupuesto</label><input id="nppto-nombre" value="${p.nombre || ''}" placeholder="Ej: Test Bug Fix,Editar Presupuesto #1..." class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
       <div><label class="block text-sm mb-1 font-medium">Cliente existente</label><select id="nppto-cliente-id" onchange="document.getElementById('nppto-cliente-nombre').value=''" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"><option value="">— Nuevo cliente —</option>${clientesOpts}</select></div>
       <div><label class="block text-sm mb-1 font-medium">Nombre del cliente (nuevo)</label><input id="nppto-cliente-nombre" value="${p.cliente_nombre || ''}" placeholder="Nombre si es cliente nuevo" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none" onchange="document.getElementById('nppto-cliente-id').value=''"/></div>
@@ -356,6 +359,7 @@ window.guardarNuevoPresupuesto = async function(ev) {
   }));
   const calc = _calcularPptoLocal();
   const saveData = {
+    nombre: document.getElementById("nppto-nombre")?.value || "",
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
     fecha_evento: document.getElementById("nppto-fecha")?.value || _hoyLocal(),
@@ -387,7 +391,12 @@ window.editarPresupuestoModal = async function(id) {
   const p = await apiGet(`/presupuestos/${id}`);
   const [clientes, mobiliario, juegos, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/juegos/").catch(() => []), apiGet("/presupuestos/logistica/precio-por-km")]);
   _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario; _nuevoPptoJuegos = (juegos || []); _nuevoPptoEditingId = id;
-  _pptoPrecioKm = kmData?.precio_por_km || 7000;
+  // Calcular el precio/km que tenía este presupuesto al guardarse,
+  // en vez de pisarlo con la configuración global (que pudo cambiar).
+  const precioKmGuardado = (p.distancia_km && p.costo_logistica)
+    ? p.costo_logistica / p.distancia_km
+    : null;
+  _pptoPrecioKm = precioKmGuardado || kmData?.precio_por_km || 7000;
   if (p.lugares && p.lugares.length > 0) {
     _nuevoPptoLugares = p.lugares.map(lug => ({
       nombre: lug.nombre || "",
@@ -426,6 +435,7 @@ window.guardarEditarPresupuesto = async function(ev, id) {
   }));
   const calc = _calcularPptoLocal();
   const saveData = {
+    nombre: document.getElementById("nppto-nombre")?.value || "",
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
     fecha_evento: document.getElementById("nppto-fecha")?.value || _hoyLocal(),

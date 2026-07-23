@@ -133,6 +133,7 @@ class Presupuesto(Base):
     __tablename__ = "presupuesto"
 
     id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(200), default="")  # nombre editable del presupuesto
     cliente_id = Column(Integer, ForeignKey("cliente.id"), nullable=True)
     cliente_nombre = Column(String(200), default="")
     fecha_evento = Column(String(100), default="")
