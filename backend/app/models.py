@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Float, Text, DateTime, Boolean, ForeignKey, Enum
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -34,18 +35,27 @@ class Mobiliario(Base):
     updated_at = Column(DateTime, onupdate=func.now())
 
 
-# ─── Juego (combo de N unidades de un mobiliario) ───
+# ─── Juego (combo de varios mobiliarios distintos) ───
 class Juego(Base):
     __tablename__ = "juego"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String(150), nullable=False)  # ej: "Juego Caña Bior 9p"
-    mobiliario_id = Column(Integer, ForeignKey("mobiliario.id"), nullable=False)
-    cantidad = Column(Integer, nullable=False, default=1)  # cuántas unidades agrupa
+    nombre = Column(String(150), nullable=False)  # ej: "Combo Living Caña"
     precio_alquiler = Column(Float, nullable=False, default=0.0)  # precio del juego completo
     descripcion = Column(Text, default="")
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
+    items = relationship("JuegoItem", backref="juego", cascade="all, delete-orphan")
+
+
+# ─── JuegoItem (cada mobiliario dentro de un juego) ───
+class JuegoItem(Base):
+    __tablename__ = "juego_item"
+
+    id = Column(Integer, primary_key=True, index=True)
+    juego_id = Column(Integer, ForeignKey("juego.id", ondelete="CASCADE"), nullable=False)
+    mobiliario_id = Column(Integer, ForeignKey("mobiliario.id"), nullable=False)
+    cantidad = Column(Integer, nullable=False, default=1)
 
 
 # ─── Cliente ───

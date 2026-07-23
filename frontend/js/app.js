@@ -342,7 +342,7 @@ window.crearEvento = async function(ev) {
 window.editarEventoModal = async function(id) {
   const ev = await apiGet(`/eventos/${id}`);
   const clientes = await apiGet("/clientes/");
-  const fechaLocal = new Date(ev.fecha).toISOString().slice(0,16);
+  const fechaLocal = (() => { const m = String(ev.fecha).match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}` : (() => { const dm = String(ev.fecha).match(/(\d{4})-(\d{2})-(\d{2})/); return dm ? `${dm[1]}-${dm[2]}-${dm[3]}T00:00` : ""; })(); })();
   showModal(`
     <h3 class="font-display text-xl mb-4">Editar Evento</h3>
     <form onsubmit="guardarEvento(event, ${id})">
@@ -755,8 +755,8 @@ function renderPresupuestosList() {
     return;
   }
   cont.innerHTML = filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(p => {
-    const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
-    const created = p.created_at ? new Date(p.created_at).toLocaleDateString("es-AR", { day: "2-digit", month: "short" }) : "";
+    const fecha = p.fecha_evento ? (() => { const m = String(p.fecha_evento).match(/(\d{4})-(\d{2})-(\d{2})/); const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
+    const created = p.created_at ? new Date(p.created_at).toLocaleDateString("es-AR", { day:"2-digit", month:"short" }) : "";
     const badge = _pptoEstadoBadge(p.estado);
     return `<div class="bg-white rounded-lg shadow-sm border border-ivory-dark hover:shadow-md transition-shadow">
       <div class="p-4 flex items-center justify-between cursor-pointer" onclick="verPresupuestoDetalle(${p.id})">
@@ -779,7 +779,7 @@ function renderPresupuestosList() {
 // ─── Ver detalle de presupuesto ───
 window.verPresupuestoDetalle = async function(id) {
   const p = await apiGet(`/presupuestos/${id}`);
-  const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day: "2-digit", month: "long", year: "numeric" }) : "—";
+  const fecha = p.fecha_evento ? (() => { const m = String(p.fecha_evento).match(/(\d{4})-(\d{2})-(\d{2})/); const ms=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
   const badge = _pptoEstadoBadge(p.estado);
 
   // Build lugares/items HTML
@@ -989,7 +989,7 @@ function _renderPptoModal(editData) {
 
   const p = editData || {};
   const clientesOpts = _nuevoPptoClientes.map(c => `<option value="${c.id}" ${p.cliente_id && c.id === p.cliente_id ? 'selected' : ''}>${c.nombre}</option>`).join("");
-  const fechaVal = p.fecha_evento ? (() => { try { return new Date(p.fecha_evento).toISOString().slice(0,10); } catch { return ""; } })() : "";
+  const fechaVal = p.fecha_evento ? (() => { try { return String(p.fecha_evento).slice(0, 10); } catch { return ""; } })() : "";
   const titulo = _nuevoPptoEditingId ? `Editar Presupuesto #${_nuevoPptoEditingId}` : "Nuevo Presupuesto";
   const submitLabel = _nuevoPptoEditingId ? "Guardar Cambios" : "Guardar Presupuesto";
   const submitAction = _nuevoPptoEditingId ? `guardarEditarPresupuesto(event, ${_nuevoPptoEditingId})` : `guardarNuevoPresupuesto(event)`;
@@ -1133,7 +1133,7 @@ window.guardarNuevoPresupuesto = async function(ev) {
   const saveData = {
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
-    fecha_evento: document.getElementById("nppto-fecha")?.value || new Date().toISOString().slice(0, 10),
+    fecha_evento: document.getElementById("nppto-fecha")?.value || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })(),
     tipo_evento: document.getElementById("nppto-tipo")?.value || "",
     cantidad_invitados: parseInt(document.getElementById("nppto-invitados")?.value) || null,
     localidad: document.getElementById("nppto-localidad")?.value || "",
@@ -1199,7 +1199,7 @@ window.guardarEditarPresupuesto = async function(ev, id) {
   const saveData = {
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
-    fecha_evento: document.getElementById("nppto-fecha")?.value || new Date().toISOString().slice(0, 10),
+    fecha_evento: document.getElementById("nppto-fecha")?.value || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; })(),
     tipo_evento: document.getElementById("nppto-tipo")?.value || "",
     cantidad_invitados: parseInt(document.getElementById("nppto-invitados")?.value) || null,
     localidad: document.getElementById("nppto-localidad")?.value || "",
@@ -1293,7 +1293,7 @@ function renderClientePerfil() {
     } else {
       tabContent = c.presupuestos.map(p => {
         const badge = _pptoEstadoBadge(p.estado);
-        const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+        const fecha = p.fecha_evento ? (() => { const m = String(p.fecha_evento).match(/(\d{4})-(\d{2})-(\d{2})/); const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
         return `<div class="flex items-center justify-between py-3 px-1 border-b border-ivory-dark/60 last:border-0 hover:bg-ivory-dark/30 rounded transition cursor-pointer" onclick="navigate('presupuestos');verPresupuestoDetalle(${p.id})">
           <div class="min-w-0 flex-1">
             <p class="font-medium truncate">${p.tipo_evento || "Presupuesto"}</p>

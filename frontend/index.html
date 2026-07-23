@@ -52,9 +52,6 @@
       <a href="#" onclick="navigate('mobiliario')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="mobiliario">
         <span class="material-symbols-outlined text-xl">chair</span> Mobiliario
       </a>
-      <a href="#" onclick="navigate('juegos')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="juegos">
-        <span class="material-symbols-outlined text-xl">inventory_2</span> Juegos
-      </a>
       <a href="#" onclick="navigate('clientes')" class="nav-link flex items-center gap-3 px-6 py-3 text-ivory/80 hover:bg-navy/50 hover:text-primary transition-colors" data-page="clientes">
         <span class="material-symbols-outlined text-xl">person</span> Clientes
       </a>
@@ -150,9 +147,19 @@
       <div id="page-mobiliario" class="page-section hidden">
         <div class="flex items-center justify-between mb-6">
           <h2 class="font-display text-3xl">Mobiliario</h2>
-          <button onclick="openMobiliarioModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1">
-            <span class="material-symbols-outlined text-lg">add</span> Agregar
-          </button>
+          <div class="relative inline-block">
+            <button onclick="document.getElementById('mob-add-dropdown').classList.toggle('hidden')" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1">
+              <span class="material-symbols-outlined text-lg">add</span> Agregar <span class="material-symbols-outlined text-base">expand_more</span>
+            </button>
+            <div id="mob-add-dropdown" class="hidden absolute right-0 mt-1 bg-white border border-ivory-dark rounded-lg shadow-lg z-50 min-w-[200px]">
+              <button onclick="document.getElementById('mob-add-dropdown').classList.add('hidden');openMobiliarioModal()" class="w-full text-left px-4 py-2 text-sm hover:bg-ivory-dark flex items-center gap-2 border-b border-ivory-dark/50">
+                <span class="material-symbols-outlined text-base">chair</span> Mobiliario individual
+              </button>
+              <button onclick="document.getElementById('mob-add-dropdown').classList.add('hidden');openJuegoModal()" class="w-full text-left px-4 py-2 text-sm hover:bg-ivory-dark flex items-center gap-2">
+                <span class="material-symbols-outlined text-base">inventory_2</span> Juego / Combo
+              </button>
+            </div>
+          </div>
         </div>
         <div class="mb-4 flex items-center gap-3 flex-wrap">
           <div class="flex items-center gap-2">
@@ -169,17 +176,13 @@
         </div>
         <div class="mb-4 flex gap-2 flex-wrap" id="mobiliario-filtros"></div>
         <div id="mobiliario-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"></div>
-      </div>
-
-      <!-- Juegos page -->
-      <div id="page-juegos" class="page-section hidden">
-        <div id="juegos-container">
-          <div class="text-center py-12 text-charcoal/40">
-            <span class="material-symbols-outlined text-5xl">inventory_2</span>
-            <p class="mt-2">Cargando...</p>
-          </div>
+        <!-- Juegos / Combos -->
+        <div class="mt-8">
+          <h3 class="font-display text-xl mb-3 flex items-center gap-2"><span class="material-symbols-outlined">inventory_2</span> Juegos / Combos</h3>
+          <div id="juegos-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
         </div>
       </div>
+
 
       <!-- Clientes page -->
       <div id="page-clientes" class="page-section hidden">

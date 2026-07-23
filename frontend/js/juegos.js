@@ -1,152 +1,210 @@
-// ─── Juegos (combos de mobiliario) ───
-let _juegosList = [];
+// ─── JUEGOS / COMBOS (integrado en Mobiliario) ───
+let _juegosCache = [];
 
 async function loadJuegos() {
   try {
-    const data = await apiGet("/juegos");
-    _juegosList = Array.isArray(data) ? data : [];
+    const juegos = await apiGet("/juegos/");
+    _juegosCache = juegos || [];
+    _renderJuegosGrid();
   } catch (e) {
-    _juegosList = [];
     console.error("Error cargando juegos:", e);
+    _juegosCache = [];
+    _renderJuegosGrid();
   }
-  renderJuegos();
 }
 
-function renderJuegos() {
-  const cont = document.getElementById("juegos-container");
-  if (!cont) return;
-  const juegos = _juegosList;
-  const cardsHtml = juegos.length === 0
-    ? `<div class="text-center py-12 text-charcoal/40"><span class="material-symbols-outlined text-5xl">inventory_2</span><p class="mt-2">No hay juegos creados</p></div>`
-    : juegos.map(j => `
-      <div class="bg-white rounded-xl shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition">
-        <div class="p-4">
-          <div class="flex items-start justify-between">
-            <div>
-              <h3 class="font-display text-lg text-navy">${j.nombre}</h3>
-              <p class="text-sm text-charcoal/60 mt-1">Mobiliario: ${j.mobiliario_nombre}</p>
-            </div>
-            <div class="flex gap-1">
-              <button onclick="editJuego(${j.id})" class="bg-ivory-dark/30 p-1.5 rounded hover:bg-primary hover:text-on-primary transition" title="Editar"><span class="material-symbols-outlined text-sm">edit</span></button>
-              <button onclick="confirmarEliminarJuego(${j.id}, '${j.nombre.replace(/'/g, "\\'")}')" class="bg-ivory-dark/30 p-1.5 rounded hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
-            </div>
-          </div>
-          <div class="grid grid-cols-3 gap-2 mt-3 text-sm">
-            <div><span class="text-charcoal/50 block">Cantidad</span><span class="font-medium">${j.cantidad} un.</span></div>
-            <div><span class="text-charcoal/50 block">Precio</span><span class="font-medium">$${(j.precio_alquiler || 0).toLocaleString("es-AR")}</span></div>
-            <div><span class="text-charcoal/50 block">Stock disp.</span><span class="font-medium">${Math.floor((j.mobiliario_stock || 0) / (j.cantidad || 1))} juegos</span></div>
-          </div>
-          ${j.descripcion ? `<p class="text-xs text-charcoal/40 mt-2 italic">${j.descripcion}</p>` : ""}
-          ${!j.activo ? `<span class="inline-block mt-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Inactivo</span>` : ""}
-        </div>
-      </div>`).join("");
-
-  cont.innerHTML = `
-    <div class="flex items-center justify-between mb-6">
-      <h2 class="font-display text-3xl">Juegos</h2>
-      <button onclick="openJuegoModal()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-1">
-        <span class="material-symbols-outlined text-base">add</span> Nuevo Juego
-      </button>
-    </div>
-    <p class="text-sm text-charcoal/50 mb-4">Un juego agrupa N unidades de un mobiliario existente. El stock se calcula según la cantidad disponible.</p>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      ${cardsHtml}
-    </div>`;
-}
-
-window.openJuegoModal = async function(editJuego) {
-  const isEdit = !!editJuego;
-  // Cargar mobiliario para el select
-  let mobiliario = [];
-  try {
-    mobiliario = await apiGet("/mobiliario");
-  } catch (e) { console.error(e); }
-  const mobOptions = (Array.isArray(mobiliario) ? mobiliario : [])
-    .filter(m => m.activo !== false)
-    .map(m => `<option value="${m.id}" ${isEdit && editJuego.mobiliario_id === m.id ? "selected" : ""}>${m.nombre} (stock: ${m.stock_total})</option>`)
-    .join("");
-
-  showModal(`<h3 class="font-display text-xl mb-4">${isEdit ? 'Editar' : 'Nuevo'} Juego</h3>
-    <form id="juego-form" onsubmit="crearJuego(event, ${isEdit ? editJuego.id : 'null'})">
-      <div class="space-y-3">
-        <div>
-          <label class="block text-sm mb-1 font-medium">Nombre del juego</label>
-          <input id="juego-nombre" value="${isEdit ? editJuego.nombre : ''}" placeholder="Ej: Juego Caña Bior 9p" required class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
-        </div>
-        <div>
-          <label class="block text-sm mb-1 font-medium">Mobiliario base</label>
-          <select id="juego-mobiliario" required class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none">
-            <option value="">— Seleccionar —</option>
-            ${mobOptions}
-          </select>
-        </div>
-        <div class="grid grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm mb-1 font-medium">Cantidad de unidades</label>
-            <input id="juego-cantidad" type="number" min="1" value="${isEdit ? editJuego.cantidad : 1}" required class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
-          </div>
-          <div>
-            <label class="block text-sm mb-1 font-medium">Precio de alquiler ($)</label>
-            <input id="juego-precio" type="number" min="0" step="1000" value="${isEdit ? editJuego.precio_alquiler : ''}" placeholder="0" required class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm mb-1 font-medium">Descripción (opcional)</label>
-          <textarea id="juego-descripcion" rows="2" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none">${isEdit ? (editJuego.descripcion || '') : ''}</textarea>
-        </div>
-        <label class="flex items-center gap-2 text-sm">
-          <input id="juego-activo" type="checkbox" ${isEdit ? (editJuego.activo ? 'checked' : '') : 'checked'} class="rounded border-ivory-dark"/>
-          Activo
-        </label>
-        <button type="submit" class="w-full bg-primary text-on-primary px-4 py-2 rounded-lg hover:opacity-90 transition font-medium flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-base">save</span> ${isEdit ? 'Guardar' : 'Crear'} Juego
-        </button>
-      </div>
-    </form>`);
-};
-
-window.crearJuego = async function(ev, editId) {
-  ev.preventDefault();
-  const data = {
-    nombre: document.getElementById("juego-nombre").value.trim(),
-    mobiliario_id: parseInt(document.getElementById("juego-mobiliario").value),
-    cantidad: parseInt(document.getElementById("juego-cantidad").value) || 1,
-    precio_alquiler: parseFloat(document.getElementById("juego-precio").value) || 0,
-    descripcion: document.getElementById("juego-descripcion").value.trim(),
-    activo: document.getElementById("juego-activo").checked,
-  };
-  if (!data.nombre || !data.mobiliario_id) {
-    toast("Faltan datos obligatorios", "error");
+function _renderJuegosGrid() {
+  const grid = document.getElementById("juegos-grid");
+  if (!grid) return;
+  if (_juegosCache.length === 0) {
+    grid.innerHTML = `<div class="text-charcoal/40 text-sm col-span-full text-center py-4">No hay juegos creados. Usá "Agregar → Juego / Combo" para crear uno.</div>`;
     return;
   }
+  grid.innerHTML = _juegosCache.map(j => {
+    const itemsHtml = (j.items || []).map(it => 
+      `<span class="text-xs bg-ivory-dark/50 rounded px-1.5 py-0.5">${it.cantidad}x ${it.mobiliario_nombre || '?'}</span>`
+    ).join(" ");
+    const total = j.precio_alquiler || 0;
+    return `<div class="card-juego bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group">
+      <div class="p-4 cursor-pointer" onclick="editJuego(${j.id})">
+        <div class="flex items-start justify-between mb-2">
+          <p class="font-medium text-sm truncate flex-1">${j.nombre}</p>
+          <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 flex-shrink-0 ml-2">
+            <button onclick="event.stopPropagation();editJuego(${j.id})" class="text-charcoal/40 hover:text-primary transition" title="Editar"><span class="material-symbols-outlined text-sm">edit</span></button>
+            <button onclick="event.stopPropagation();confirmarEliminarJuego(${j.id},'${(j.nombre||'').replace(/'/g,"\\'")}')" class="text-charcoal/40 hover:text-red-500 transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-1 mb-2">${itemsHtml}</div>
+        <div class="flex justify-between items-center mt-2 pt-2 border-t border-ivory-dark/50">
+          <span class="text-xs text-charcoal/50">${(j.items||[]).length} items</span>
+          <span class="font-display text-navy">$${total.toLocaleString("es-AR")}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+// ─── Modal crear/editar juego ───
+let _juegoModalItems = [];  // [{ mobiliario_id, cantidad }]
+let _juegoModalEditingId = null;
+let _juegoModalMobiliario = [];
+let _juegoPrecioSugerido = 0;
+
+window.openJuegoModal = async function(editId) {
+  _juegoModalEditingId = editId || null;
+  _juegoModalItems = [];
+  
+  // Cargar lista de mobiliario para el dropdown
+  _juegoModalMobiliario = await apiGet("/mobiliario/");
+  
+  let editData = null;
+  if (editId) {
+    editData = _juegosCache.find(j => j.id === editId);
+    if (editData && editData.items) {
+      _juegoModalItems = editData.items.map(it => ({ mobiliario_id: it.mobiliario_id, cantidad: it.cantidad }));
+    }
+  }
+  
+  if (_juegoModalItems.length === 0) {
+    _juegoModalItems.push({ mobiliario_id: null, cantidad: 1 });
+  }
+  
+  _renderJuegoModal(editData);
+};
+
+function _renderJuegoModal(editData) {
+  const ed = editData || {};
+  const titulo = _juegoModalEditingId ? `Editar Juego #${_juegoModalEditingId}` : "Nuevo Juego / Combo";
+  showModal(`<h3 class="font-display text-xl mb-4">${titulo}</h3>
+    <form onsubmit="guardarJuego(event)" class="space-y-3">
+      <div><label class="block text-sm mb-1 font-medium">Nombre del juego</label>
+        <input id="juego-nombre" required value="${ed.nombre || ''}" placeholder="Ej: Combo Caña" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/>
+      </div>
+      <div><label class="block text-sm mb-1 font-medium">Descripcion</label>
+        <textarea id="juego-desc" rows="2" placeholder="Opcional" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none">${ed.descripcion || ''}</textarea>
+      </div>
+      <div>
+        <h4 class="font-medium text-sm mb-2 text-charcoal/70">Items del combo</h4>
+        <div id="juego-items" class="space-y-2"></div>
+        <button type="button" onclick="_addJuegoItem()" class="mt-2 text-xs text-primary hover:underline flex items-center gap-1"><span class="material-symbols-outlined text-sm">add</span> Agregar item</button>
+      </div>
+      <div id="juego-precio-total" class="border-t border-ivory-dark pt-2 mt-2 text-sm"></div>
+      <div><label class="block text-sm mb-1 font-medium">Precio del combo</label>
+        <div class="flex gap-2 items-center">
+          <input id="juego-precio" type="number" min="0" step="1000" value="${ed.precio_alquiler ?? 0}" class="w-32 border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none" placeholder="Precio final"/>
+          <button type="button" id="juego-precio-suggest-btn" onclick="_syncPrecioSugerido()" class="text-xs text-primary hover:underline">Usar sugerido</button>
+        </div>
+        <p id="juego-precio-sugerido-txt" class="text-xs text-charcoal/40 mt-1"></p>
+      </div>
+      <button type="submit" class="w-full bg-primary text-on-primary px-4 py-2 rounded-lg hover:opacity-90 transition font-medium">${_juegoModalEditingId ? 'Actualizar' : 'Crear'} Juego</button>
+    </form>`);
+  _renderJuegoItems();
+}
+
+function _renderJuegoItems() {
+  const cont = document.getElementById("juego-items");
+  if (!cont) return;
+  cont.innerHTML = _juegoModalItems.map((item, i) => {
+    const sel = _juegoModalMobiliario.find(m => m.id === item.mobiliario_id);
+    const selLabel = sel ? `${sel.nombre} – $${sel.precio_alquiler?.toLocaleString("es-AR")}` : "";
+    return `<div class="flex gap-2 items-center">
+      <div class="relative flex-1">
+        <input type="text" value="${selLabel}" placeholder="Buscar mobiliario..." autocomplete="off" oninput="_juegoItemSearch(this, ${i})" class="w-full border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" />
+        <div class="absolute z-50 left-0 right-0 mt-1 bg-white border border-ivory-dark rounded-lg shadow-lg max-h-48 overflow-y-auto hidden" data-juego-dd="1"></div>
+      </div>
+      <input type="number" value="${item.cantidad}" min="1" onchange="_juegoModalItems[${i}].cantidad=parseInt(this.value)||1;_renderJuegoItems()" class="w-20 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" placeholder="Cant"/>
+      ${_juegoModalItems.length > 1 ? `<button type="button" onclick="_removeJuegoItem(${i})" class="text-red-400 hover:text-red-600 transition"><span class="material-symbols-outlined text-sm">close</span></button>` : ''}
+    </div>`;
+  }).join("");
+  _updateJuegoPrecioTotal();
+}
+
+function _updateJuegoPrecioTotal() {
+  const el = document.getElementById("juego-precio-total");
+  if (!el) return;
+  let total = 0;
+  _juegoModalItems.forEach(item => {
+    const mob = _juegoModalMobiliario.find(m => m.id === item.mobiliario_id);
+    if (mob) total += (mob.precio_alquiler || 0) * (item.cantidad || 1);
+  });
+  el.innerHTML = `<div class="flex justify-between"><span class="text-charcoal/50">Items válidos: ${_juegoModalItems.filter(i => i.mobiliario_id).length}</span><span class="text-charcoal/50">Suma de items: $${total.toLocaleString("es-AR")}</span></div>`;
+  _juegoPrecioSugerido = total;
+  const sugTxt = document.getElementById("juego-precio-sugerido-txt");
+  if (sugTxt) sugTxt.textContent = `Sugerido (suma de items): $${total.toLocaleString("es-AR")}`;
+}
+
+window._syncPrecioSugerido = function() {
+  const inp = document.getElementById("juego-precio");
+  if (inp) inp.value = _juegoPrecioSugerido;
+};
+
+window._juegoItemSearch = function(inputEl, i) {
+  const dd = inputEl.parentElement.querySelector('[data-juego-dd]');
+  if (!dd) return;
+  _juegoModalItems[i].mobiliario_id = null;
+  const q = inputEl.value.trim().toLowerCase();
+  if (!q) { dd.classList.add("hidden"); dd.innerHTML = ""; return; }
+  const filtrados = _juegoModalMobiliario.filter(m => (m.nombre || "").toLowerCase().includes(q)).slice(0, 20);
+  if (filtrados.length === 0) {
+    dd.classList.remove("hidden");
+    dd.innerHTML = `<div class="p-2 text-sm text-charcoal/40">Sin resultados</div>`;
+    return;
+  }
+  dd.classList.remove("hidden");
+  dd.innerHTML = filtrados.map(m => 
+    `<div class="p-2 text-sm cursor-pointer hover:bg-ivory-dark border-b border-ivory-dark/50 last:border-0" onclick="_juegoItemSelect(${i}, ${m.id})"><span class="font-medium">${m.nombre}</span> <span class="text-charcoal/50">— $${m.precio_alquiler?.toLocaleString("es-AR")}</span></div>`
+  ).join("");
+};
+
+window._juegoItemSelect = function(i, mobId) {
+  _juegoModalItems[i].mobiliario_id = mobId;
+  _renderJuegoItems();
+};
+
+window._addJuegoItem = function() {
+  _juegoModalItems.push({ mobiliario_id: null, cantidad: 1 });
+  _renderJuegoItems();
+};
+
+window._removeJuegoItem = function(i) {
+  _juegoModalItems.splice(i, 1);
+  _renderJuegoItems();
+};
+
+window.guardarJuego = async function(ev) {
+  ev.preventDefault();
+  const nombre = document.getElementById("juego-nombre").value.trim();
+  const descripcion = document.getElementById("juego-desc").value.trim();
+  const items = _juegoModalItems.filter(i => i.mobiliario_id);
+  if (items.length === 0) { toast("Agrega al menos un item", "error"); return; }
+  
+  const data = { nombre, descripcion, precio_alquiler: parseFloat(document.getElementById("juego-precio").value) || 0, items: items.map(i => ({ mobiliario_id: i.mobiliario_id, cantidad: i.cantidad })) };
+  
   try {
-    if (editId) {
-      await apiPut(`/juegos/${editId}`, data);
+    if (_juegoModalEditingId) {
+      await apiPut(`/juegos/${_juegoModalEditingId}`, data);
       toast("Juego actualizado");
     } else {
-      await apiPost("/juegos", data);
+      await apiPost("/juegos/", data);
       toast("Juego creado");
     }
     closeModal();
     loadJuegos();
   } catch (e) {
-    console.error(e);
-    toast("Error al guardar juego: " + (e.message || e), "error");
+    toast("Error: " + e.message, "error");
   }
 };
 
-window.editJuego = async function(id) {
-  const juegos = await apiGet("/juegos");
-  const item = juegos.find(j => j.id === id);
-  if (item) openJuegoModal(item);
+window.editJuego = function(id) {
+  openJuegoModal(id);
 };
 
 window.confirmarEliminarJuego = function(id, nombre) {
   showModal(`<h3 class="font-display text-xl mb-4 text-red-600">Eliminar Juego</h3>
-    <p class="mb-4">¿Seguro que querés eliminar "<strong>${nombre}</strong>"? Esta acción no se puede deshacer.</p>
+    <p class="text-sm mb-4">¿Estás seguro de eliminar <strong>${nombre}</strong>?</p>
     <div class="flex gap-2">
+      <button onclick="closeModal()" class="flex-1 bg-ivory-dark text-charcoal px-4 py-2 rounded-lg hover:bg-ivory transition font-medium">Cancelar</button>
       <button onclick="eliminarJuego(${id})" class="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition font-medium">Eliminar</button>
-      <button onclick="closeModal()" class="flex-1 bg-ivory-dark/30 px-4 py-2 rounded-lg hover:bg-ivory-dark/50 transition">Cancelar</button>
     </div>`);
 };
 
@@ -157,6 +215,6 @@ window.eliminarJuego = async function(id) {
     loadJuegos();
     toast("Juego eliminado");
   } catch (e) {
-    toast("Error al eliminar: " + (e.message || e), "error");
+    toast("Error: " + e.message, "error");
   }
 };

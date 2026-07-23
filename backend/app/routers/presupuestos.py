@@ -12,7 +12,7 @@ import io
 from app.database import get_db
 from app.models import (
     Mobiliario, Cliente, Evento, EventoMobiliario, Presupuesto,
-    LogisticaZona, LogisticaServicio, ConfigLogistica,
+    LogisticaZona, LogisticaServicio, ConfigLogistica, Juego, JuegoItem,
 )
 from app.schemas import (
     PresupuestoRequest, PresupuestoResponse, PresupuestoLinea,
@@ -202,6 +202,44 @@ def calcular_presupuesto_avanzado(data: PresupuestoAvanzadoRequest, db: Session 
         productos_calc = []
         subtotal_lugar = 0.0
         for prod in lugar.productos:
+            # CASO 1: es un Juego (combo de varios mobiliarios)
+            if prod.juego_id:
+                juego = db.query(Juego).filter(Juego.id == prod.juego_id).first()
+                if not juego or not juego.activo:
+                    continue
+                items_juego = db.query(JuegoItem).filter(JuegoItem.juego_id == juego.id).all()
+                # Expandir visualmente cada item del juego para el PDF / detalle
+                nombres_items = []
+                cant_total_expandida = 0
+                for ji in items_juego:
+                    m = db.query(Mobiliario).filter(Mobiliario.id == ji.mobiliario_id).first()
+                    if not m:
+                        continue
+                    cant = ji.cantidad * prod.cantidad
+                    cant_total_expandida += cant
+                    productos_calc.append(PresupuestoLinea(
+                        mobiliario_id=ji.mobiliario_id,
+                        nombre=m.nombre,
+                        cantidad=cant,
+                        precio_unitario=0.0,
+                        subtotal=0.0,  # informativo; el subtotal real va en la línea resumen
+                    ))
+                # Precio del juego completo
+                precio_base = prod.precio_manual if prod.precio_manual is not None else juego.precio_alquiler
+                precio = calcular_precio_ajustado(precio_base, data.fecha_evento)
+                sub = precio * prod.cantidad
+                subtotal_lugar += sub
+                # Línea resumen con el nombre del juego
+                productos_calc.append(PresupuestoLinea(
+                    mobiliario_id=0,
+                    nombre=f"Juego: {juego.nombre}" + (f" ({cant_total_expandida} piezas)" if cant_total_expandida > 1 else ""),
+                    cantidad=prod.cantidad,
+                    precio_unitario=precio,
+                    subtotal=sub,
+                ))
+                continue
+
+            # CASO 2: Mobiliario individual
             mob = None
             if prod.mobiliario_id:
                 mob = mob_by_id.get(prod.mobiliario_id)
@@ -346,6 +384,7 @@ def _get_ppto_with_lugares(ppto_id: int, db: Session):
         "distancia_km": p.distancia_km,
         "subtotal_mobiliario": p.subtotal_mobiliario,
         "costo_logistica": p.costo_logistica,
+        "costo_armado": getattr(p, 'costo_armado', None) or 0.0,
         "total": p.total,
         "estado": p.estado,
     }
@@ -448,6 +487,10 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
             db.refresh(cliente)
             cliente_id = cliente.id
 
+    # DEBUG: log fecha recibida
+    import logging
+    logging.warning(f"DEBUG guardar_presupuesto: fecha_evento recibida = {data.fecha_evento!r}")
+
     p = Presupuesto(
         cliente_id=cliente_id,
         cliente_nombre=cliente_nombre,
@@ -475,6 +518,9 @@ def actualizar_presupuesto(ppto_id: int, data: PresupuestoSave, db: Session = De
     p = db.query(Presupuesto).filter(Presupuesto.id == ppto_id).first()
     if not p:
         raise HTTPException(404, "Presupuesto no encontrado")
+    # DEBUG: log fecha recibida
+    import logging
+    logging.warning(f"DEBUG actualizar_presupuesto({ppto_id}): fecha_evento recibida = {data.fecha_evento!r}")
     p.cliente_id = data.cliente_id
     p.cliente_nombre = data.cliente_nombre
     p.fecha_evento = data.fecha_evento
@@ -519,12 +565,14 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(cliente)
 
-    from datetime import datetime as dt
+    from datetime import datetime as dt, date as _d
+    # BUG FIX: parsear fecha sin timezone para evitar offset de 1 dia
     fecha = dt.now()
     if p.fecha_evento:
-        for fmt in ("%d/%m/%y", "%d/%m/%Y", "%Y-%m-%d"):
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
             try:
-                fecha = dt.strptime(p.fecha_evento.strip(), fmt)
+                parsed = dt.strptime(p.fecha_evento.strip(), fmt)
+                fecha = parsed
                 break
             except ValueError:
                 continue
@@ -551,6 +599,26 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
     lugares = json.loads(p.lugares_json) if p.lugares_json else []
     for lugar in lugares:
         for prod in lugar.get("productos", []):
+            # CASO JUEGO: crear una linea con el precio del combo
+            jid = prod.get("juego_id")
+            if jid:
+                juego = db.query(Juego).filter(Juego.id == jid).first()
+                if not juego:
+                    continue
+                # Usar el primer item del juego como mobiliario_id placeholder
+                items_juego = db.query(JuegoItem).filter(JuegoItem.juego_id == juego.id).all()
+                placeholder_mid = items_juego[0].mobiliario_id if items_juego else 1
+                precio_juego = calcular_precio_ajustado(juego.precio_alquiler, p.fecha_evento)
+                em = EventoMobiliario(
+                    evento_id=evento.id,
+                    mobiliario_id=placeholder_mid,
+                    cantidad=prod.get("cantidad", 1),
+                    precio_unitario=precio_juego,
+                )
+                db.add(em)
+                continue
+
+            # CASO MOBILIARIO INDIVIDUAL
             mob = None
             mid = prod.get("mobiliario_id")
             if mid:
@@ -573,8 +641,9 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
     _recalcular_evento(evento, db)
     # Forzar que SQLAlchemy persista el monto_total recalculado
     db.flush()
-    # Reasignar para forzar dirty flag y que commit() lo guarde
-    evento.monto_total = sum(em.cantidad * em.precio_unitario for em in db.query(EventoMobiliario).filter(EventoMobiliario.evento_id == evento.id).all()) + evento.costo_traslado + (evento.costo_mano_obra or 0)
+    # Usar el total del presupuesto como monto_total del evento
+    # (el presupuesto ya tiene los precios correctos incluyendo juegos)
+    evento.monto_total = p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0)
 
     p.evento_id = evento.id
     p.estado = "confirmado"

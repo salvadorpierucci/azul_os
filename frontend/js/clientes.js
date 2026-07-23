@@ -131,7 +131,7 @@ function renderClientePerfil() {
     } else {
       tabContent = c.eventos.map(e => {
         const badge = e.estado === "confirmado" ? "bg-primary text-on-primary" : e.estado === "reserva" ? "bg-yellow-400 text-charcoal" : e.estado === "cancelado" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700";
-        const fecha = e.fecha ? new Date(e.fecha).toLocaleDateString("es-AR", { day:"2-digit", month:"short", year:"numeric" }) : "—";
+        const fecha = e.fecha ? (() => { const m = String(e.fecha).match(/^(\d{4})-(\d{2})-(\d{2})/); const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
         const title = e.titulo || `Evento #${e.id}`;
         return `<div class="flex items-center justify-between py-3 px-1 border-b border-ivory-dark/60 last:border-0 hover:bg-ivory-dark/30 rounded transition">
           <div class="min-w-0 flex-1"><p class="font-medium truncate">${title}</p><p class="text-xs text-charcoal/50">${fecha}</p></div>
@@ -145,7 +145,7 @@ function renderClientePerfil() {
     } else {
       tabContent = c.presupuestos.map(p => {
         const badge = _pptoEstadoBadge(p.estado);
-        const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day:"2-digit", month:"short", year:"numeric" }) : "—";
+        const fecha = p.fecha_evento ? (() => { const m = String(p.fecha_evento).match(/^(\d{4})-(\d{2})-(\d{2})/); const ms=["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"]; return m ? `${m[3]} ${ms[parseInt(m[2],10)-1]} ${m[1]}` : "—"; })() : "—";
         return `<div class="flex items-center justify-between py-3 px-1 border-b border-ivory-dark/60 last:border-0 hover:bg-ivory-dark/30 rounded transition cursor-pointer" onclick="navigate('presupuestos');verPresupuestoDetalle(${p.id})">
           <div class="min-w-0 flex-1"><p class="font-medium truncate">${p.tipo_evento || "Presupuesto"}</p><p class="text-xs text-charcoal/50">${fecha}</p></div>
           <div class="flex items-center gap-2 flex-shrink-0 ml-3"><span class="font-display text-sm text-navy">$${(p.total || 0).toLocaleString("es-AR")}</span><span class="text-xs px-2 py-1 rounded ${badge}">${p.estado || "borrador"}</span></div>

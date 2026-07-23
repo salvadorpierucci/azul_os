@@ -32,7 +32,7 @@ async function loadFinanzas() {
   finanzasAnio = parseInt(anioSel.value); finanzasMes = parseInt(mesSel.value);
   const [resumen, registros, eventos] = await Promise.all([apiGet(`/finanzas/resumen/mensual?anio=${finanzasAnio}&mes=${finanzasMes}`), apiGet("/finanzas/"), apiGet("/eventos/")]);
   _finanzasEventos = {}; eventos.forEach(e => { _finanzasEventos[e.id] = e.titulo; });
-  _finanzasRegistros = registros.filter(r => { const d = new Date(r.fecha); return d.getFullYear() === finanzasAnio && (d.getMonth() + 1) === finanzasMes; });
+  _finanzasRegistros = registros.filter(r => { const m = String(r.fecha).match(/^(\d{4})-(\d{2})/); return m && parseInt(m[1]) === finanzasAnio && parseInt(m[2]) === finanzasMes; });
   document.getElementById("finanzas-summary").innerHTML = `
     <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark text-center"><p class="text-xs uppercase tracking-wider text-charcoal/40 mb-1">Ingresos</p><p class="text-2xl font-display text-navy">$${resumen.ingresos?.toLocaleString("es-AR") || 0}</p></div>
     <div class="bg-white rounded-lg shadow-sm p-5 border border-ivory-dark text-center"><p class="text-xs uppercase tracking-wider text-charcoal/40 mb-1">Egresos</p><p class="text-2xl font-display text-red-500">$${resumen.egresos?.toLocaleString("es-AR") || 0}</p></div>
@@ -44,8 +44,10 @@ function _renderFinanzasList() {
   const filtered = finanzasTipoFilter === "todos" ? _finanzasRegistros : _finanzasRegistros.filter(r => r.tipo === finanzasTipoFilter);
   const cont = document.getElementById("finanzas-list");
   if (filtered.length === 0) { cont.innerHTML = `<div class="text-center py-8 text-charcoal/40"><span class="material-symbols-outlined text-4xl mb-2 block">receipt_long</span><p>No hay registros para ${MONTHS_ES[finanzasMes - 1]} ${finanzasAnio}</p></div>`; return; }
-  cont.innerHTML = filtered.sort((a, b) => new Date(b.fecha) - new Date(a.fecha)).map(r => {
-    const fechaStr = new Date(r.fecha).toLocaleDateString("es-AR", { day:"2-digit", month:"short" });
+  cont.innerHTML = filtered.sort((a, b) => String(b.fecha).localeCompare(String(a.fecha))).map(r => {
+    const _m = String(r.fecha).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const _ms = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+    const fechaStr = _m ? `${_m[3]} ${_ms[parseInt(_m[2],10)-1]}` : String(r.fecha);
     const icon = r.tipo === "ingreso" ? "trending_up" : "trending_down";
     const tipoBadge = r.tipo === "ingreso" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700";
     const tipoLabel = r.tipo === "ingreso" ? "+" : "-";

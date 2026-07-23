@@ -1,4 +1,28 @@
 // ─── PRESUPUESTOS ───
+
+// Helper: formatea fecha sin timezone issues.
+// Acepta "2026-07-03", "2026-07-03 00:00:00.000000", "2026-07-03T00:00:00" etc.
+// Siempre extrae YYYY-MM-DD del string y formatea local (es-AR).
+const _MESES_CORTOS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const _MESES_LARGOS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function _fmtFecha(fechaStr, largo = false) {
+  if (!fechaStr) return "—";
+  const m = String(fechaStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return fechaStr;
+  const dd = m[3], mm = parseInt(m[2], 10) - 1, yyyy = m[1];
+  const meses = largo ? _MESES_LARGOS : _MESES_CORTOS;
+  return `${dd} ${meses[mm]} ${yyyy}`;
+}
+
+// Devuelve YYYY-MM-DD en hora local (no UTC) para usar como fallback en inputs.
+function _hoyLocal() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 async function loadPresupuestos() {
   presupuestosList = await apiGet("/presupuestos/");
   _presupuestosList = presupuestosList || [];
@@ -30,7 +54,7 @@ function renderPresupuestosList() {
     return;
   }
   cont.innerHTML = filtered.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)).map(p => {
-    const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day:"2-digit", month:"short", year:"numeric" }) : "—";
+    const fecha = _fmtFecha(p.fecha_evento);
     const created = p.created_at ? new Date(p.created_at).toLocaleDateString("es-AR", { day:"2-digit", month:"short" }) : "";
     const badge = _pptoEstadoBadge(p.estado);
     return `<div class="bg-white rounded-lg shadow-sm border border-ivory-dark hover:shadow-md transition-shadow">
@@ -47,7 +71,7 @@ function renderPresupuestosList() {
 
 window.verPresupuestoDetalle = async function(id) {
   const p = await apiGet(`/presupuestos/${id}`);
-  const fecha = p.fecha_evento ? new Date(p.fecha_evento).toLocaleDateString("es-AR", { day:"2-digit", month:"long", year:"numeric" }) : "—";
+  const fecha = _fmtFecha(p.fecha_evento, true);
   const badge = _pptoEstadoBadge(p.estado);
   let lugaresHtml = "";
   if (p.lugares && p.lugares.length > 0) {
@@ -113,10 +137,10 @@ window.convertirPresupuestoEvento = async function(id) {
 };
 
 window.openNuevoPresupuestoModal = async function() {
-  const [clientes, mobiliario, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/presupuestos/logistica/precio-por-km")]);
-  _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario;
+  const [clientes, mobiliario, juegos, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/juegos/").catch(() => []), apiGet("/presupuestos/logistica/precio-por-km")]);
+  _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario; _nuevoPptoJuegos = (juegos || []);
   _pptoPrecioKm = kmData?.precio_por_km || 7000;
-  _nuevoPptoLugares = [{ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1 }] }];
+  _nuevoPptoLugares = [{ nombre: "", productos: [{ tipo: "mob", id: null, cantidad: 1, label: "" }] }];
   _nuevoPptoEditingId = null; _renderPptoModal();
 };
 
@@ -158,14 +182,20 @@ function _pptoFechaEvento() {
 function _calcularPptoLocal() {
   const dist = parseFloat(document.getElementById("nppto-distancia")?.value) || 0;
   const mobById = {}; _nuevoPptoMobiliario.forEach(m => { mobById[m.id] = m; });
+  const juegoById = {}; (_nuevoPptoJuegos || []).forEach(j => { juegoById[j.id] = j; });
   const fecha = _pptoFechaEvento();
   let subtotalMob = 0;
   _nuevoPptoLugares.forEach(lug => {
     lug.productos.forEach(p => {
-      const mob = mobById[p.mobiliario_id];
-      if (mob) {
-        const precioAjustado = calcularPrecioAjustado(mob.precio_alquiler, fecha);
-        subtotalMob += precioAjustado * (p.cantidad || 1);
+      if (p.juego_id) {
+        const jg = juegoById[p.juego_id];
+        if (jg) subtotalMob += (jg.precio_alquiler || 0) * (p.cantidad || 1);
+      } else if (p.mobiliario_id) {
+        const mob = mobById[p.mobiliario_id];
+        if (mob) {
+          const precioAjustado = calcularPrecioAjustado(mob.precio_alquiler, fecha);
+          subtotalMob += precioAjustado * (p.cantidad || 1);
+        }
       }
     });
   });
@@ -196,11 +226,17 @@ function _renderPptoLugaresOnly() {
       <input value="${lug.nombre}" placeholder="Nombre del lugar" onchange="_nuevoPptoLugares[${li}].nombre=this.value" class="flex-1 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none"/>
       ${_nuevoPptoLugares.length > 1 ? `<button type="button" onclick="_removeLugar(${li})" class="text-red-400 hover:text-red-600 transition"><span class="material-symbols-outlined text-lg">close</span></button>` : ''}</div><div class="space-y-2">`;
     lug.productos.forEach((prod, pi) => {
-      const selMob = _nuevoPptoMobiliario.find(m => m.id === prod.mobiliario_id);
-      const selLabel = selMob ? `${selMob.nombre} – $${selMob.precio_alquiler?.toLocaleString("es-AR")}` : "";
+      const esJuego = !!prod.juego_id;
+      const selMob = esJuego ? null : _nuevoPptoMobiliario.find(m => m.id === prod.mobiliario_id);
+      const selJuego = esJuego ? (_nuevoPptoJuegos || []).find(j => j.id === prod.juego_id) : null;
+      const selLabel = esJuego 
+        ? (selJuego ? `${selJuego.nombre} – $${(selJuego.precio_alquiler||0).toLocaleString("es-AR")}` : "Juego")
+        : (selMob ? `${selMob.nombre} – $${selMob.precio_alquiler?.toLocaleString("es-AR")}` : "");
+      const iconTag = esJuego ? '<span class="material-symbols-outlined text-xs text-charcoal/40 mr-1">inventory_2</span>' : '';
       html += `<div class="flex gap-2 items-center">
         <div class="relative flex-1">
-          <input type="text" value="${selLabel}" placeholder="Buscar mobiliario..." autocomplete="off" oninput="_pptoMobSearch(this, ${li}, ${pi})" class="w-full border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" />
+          <input type="text" value="${selLabel}" placeholder="Buscar mobiliario o juego..." autocomplete="off" oninput="_pptoMobSearch(this, ${li}, ${pi})" class="w-full border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none pl-8" />
+          <span class="material-symbols-outlined text-xs text-charcoal/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">${esJuego ? 'inventory_2' : 'chair'}</span>
           <div class="absolute z-50 left-0 right-0 mt-1 bg-white border border-ivory-dark rounded-lg shadow-lg max-h-48 overflow-y-auto hidden" data-ppto-dropdown="1"></div>
         </div>
         <input type="number" value="${prod.cantidad}" min="1" onchange="_nuevoPptoLugares[${li}].productos[${pi}].cantidad=parseInt(this.value)||1;_actualizarTotalesPpto()" class="w-20 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" placeholder="Cant"/>
@@ -212,31 +248,51 @@ function _renderPptoLugaresOnly() {
   cont.innerHTML = html; _actualizarTotalesPpto();
 }
 
-// Búsqueda en vivo de mobiliario dentro del modal de presupuesto
+// Búsqueda en vivo de mobiliario Y juegos dentro del modal de presupuesto
 window._pptoMobSearch = function(inputEl, li, pi) {
   const dd = inputEl.parentElement.querySelector('[data-ppto-dropdown]');
   if (!dd) return;
   // limpiar selección previa al escribir
   _nuevoPptoLugares[li].productos[pi].mobiliario_id = null;
+  _nuevoPptoLugares[li].productos[pi].juego_id = null;
   const q = inputEl.value.trim().toLowerCase();
   if (!q) { dd.classList.add("hidden"); dd.innerHTML = ""; return; }
   const fecha = _pptoFechaEvento();
-  const filtrados = _nuevoPptoMobiliario.filter(m => (m.nombre || "").toLowerCase().includes(q)).slice(0, 20);
-  if (filtrados.length === 0) {
+  // Buscar mobiliario
+  const filtradosMob = _nuevoPptoMobiliario.filter(m => (m.nombre || "").toLowerCase().includes(q)).slice(0, 15);
+  // Buscar juegos
+  const filtradosJuegos = (_nuevoPptoJuegos || []).filter(j => (j.nombre || "").toLowerCase().includes(q)).slice(0, 5);
+  if (filtradosMob.length === 0 && filtradosJuegos.length === 0) {
     dd.classList.remove("hidden");
     dd.innerHTML = `<div class="p-2 text-sm text-charcoal/40">Sin resultados</div>`;
     return;
   }
   dd.classList.remove("hidden");
-  dd.innerHTML = filtrados.map(m => {
-    const precioAjs = calcularPrecioAjustado(m.precio_alquiler, fecha);
-    const precioTxt = precioAjs !== m.precio_alquiler ? `$${precioAjs.toLocaleString("es-AR")}` : `$${m.precio_alquiler?.toLocaleString("es-AR")}`;
-    return `<div class="p-2 text-sm cursor-pointer hover:bg-ivory-dark border-b border-ivory-dark/50 last:border-0" onclick="_pptoMobSelect(${li}, ${pi}, ${m.id})"><span class="font-medium">${m.nombre}</span> <span class="text-charcoal/50">— ${precioTxt}</span></div>`;
-  }).join("");
+  let html = "";
+  if (filtradosMob.length > 0) {
+    html += filtradosMob.map(m => {
+      const precioAjs = calcularPrecioAjustado(m.precio_alquiler, fecha);
+      const precioTxt = precioAjs !== m.precio_alquiler ? `$${precioAjs.toLocaleString("es-AR")}` : `$${m.precio_alquiler?.toLocaleString("es-AR")}`;
+      return `<div class="p-2 text-sm cursor-pointer hover:bg-ivory-dark border-b border-ivory-dark/50 last:border-0" onclick="_pptoMobSelect(${li}, ${pi}, ${m.id})"><span class="material-symbols-outlined text-xs text-charcoal/40 align-middle mr-1">chair</span><span class="font-medium">${m.nombre}</span> <span class="text-charcoal/50">— ${precioTxt}</span></div>`;
+    }).join("");
+  }
+  if (filtradosJuegos.length > 0) {
+    html += `<div class="px-2 py-1 text-xs text-charcoal/40 bg-ivory-dark/30 font-medium">JUEGOS / COMBOS</div>`;
+    html += filtradosJuegos.map(j => {
+      const itemsDesc = (j.items || []).map(it => `${it.cantidad}x ${it.mobiliario_nombre||''}`).join(", ");
+      return `<div class="p-2 text-sm cursor-pointer hover:bg-ivory-dark border-b border-ivory-dark/50 last:border-0" onclick="_pptoJuegoSelect(${li}, ${pi}, ${j.id})"><span class="material-symbols-outlined text-xs text-charcoal/40 align-middle mr-1">inventory_2</span><span class="font-medium">${j.nombre}</span> <span class="text-charcoal/50">— $${(j.precio_alquiler||0).toLocaleString("es-AR")}</span> <span class="text-xs text-charcoal/40 block ml-5">${itemsDesc}</span></div>`;
+    }).join("");
+  }
+  dd.innerHTML = html;
 };
 
 window._pptoMobSelect = function(li, pi, mobId) {
-  _nuevoPptoLugares[li].productos[pi].mobiliario_id = mobId;
+  _nuevoPptoLugares[li].productos[pi] = { mobiliario_id: mobId, cantidad: _nuevoPptoLugares[li].productos[pi].cantidad || 1 };
+  _renderPptoLugaresOnly();
+};
+
+window._pptoJuegoSelect = function(li, pi, juegoId) {
+  _nuevoPptoLugares[li].productos[pi] = { juego_id: juegoId, cantidad: 1 };
   _renderPptoLugaresOnly();
 };
 
@@ -245,7 +301,7 @@ function _renderPptoModal(editData) {
   mc.classList.remove("max-w-lg"); mc.classList.add("max-w-3xl");
   const p = editData || {};
   const clientesOpts = _nuevoPptoClientes.map(c => `<option value="${c.id}" ${p.cliente_id && c.id === p.cliente_id ? 'selected' : ''}>${c.nombre}</option>`).join("");
-  const fechaVal = p.fecha_evento ? (() => { try { return new Date(p.fecha_evento).toISOString().slice(0,10); } catch { return ""; } })() : "";
+  const fechaVal = p.fecha_evento ? (() => { try { return p.fecha_evento.slice(0, 10); } catch { return ""; } })() : "";
   const titulo = _nuevoPptoEditingId ? `Editar Presupuesto #${_nuevoPptoEditingId}` : "Nuevo Presupuesto";
   const submitLabel = _nuevoPptoEditingId ? "Guardar Cambios" : "Guardar Presupuesto";
   const submitAction = _nuevoPptoEditingId ? `guardarEditarPresupuesto(event, ${_nuevoPptoEditingId})` : `guardarNuevoPresupuesto(event)`;
@@ -285,15 +341,24 @@ window.guardarNuevoPresupuesto = async function(ev) {
   const clienteId = parseInt(document.getElementById("nppto-cliente-id")?.value) || null;
   const clienteNombre = document.getElementById("nppto-cliente-nombre")?.value || "";
   if (!clienteId && !clienteNombre) { toast("Indica un cliente existente o escribe el nombre", "error"); return; }
-  const hasProducts = _nuevoPptoLugares.some(l => l.productos.some(p => p.mobiliario_id));
+  const hasProducts = _nuevoPptoLugares.some(l => l.productos.some(p => p.mobiliario_id || p.juego_id));
   if (!hasProducts) { toast("Agrega al menos un item de mobiliario", "error"); return; }
   const esClienteNuevo = !clienteId && !!clienteNombre;
-  const lugares = _nuevoPptoLugares.map(lug => ({ nombre: lug.nombre || "Lugar", productos: lug.productos.filter(p => p.mobiliario_id).map(p => ({ mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad })) }));
+  const lugares = _nuevoPptoLugares.map(lug => ({
+    nombre: lug.nombre || "Lugar",
+    productos: lug.productos.filter(p => p.mobiliario_id || p.juego_id).map(p => {
+      if (p.juego_id) {
+        const jg = (_nuevoPptoJuegos || []).find(j => j.id === p.juego_id);
+        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad };
+      }
+      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad };
+    })
+  }));
   const calc = _calcularPptoLocal();
   const saveData = {
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
-    fecha_evento: document.getElementById("nppto-fecha")?.value || new Date().toISOString().slice(0, 10),
+    fecha_evento: document.getElementById("nppto-fecha")?.value || _hoyLocal(),
     tipo_evento: document.getElementById("nppto-tipo")?.value || "",
     cantidad_invitados: parseInt(document.getElementById("nppto-invitados")?.value) || null,
     localidad: document.getElementById("nppto-localidad")?.value || "",
@@ -320,12 +385,27 @@ window.guardarNuevoPresupuesto = async function(ev) {
 
 window.editarPresupuestoModal = async function(id) {
   const p = await apiGet(`/presupuestos/${id}`);
-  const [clientes, mobiliario, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/presupuestos/logistica/precio-por-km")]);
-  _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario; _nuevoPptoEditingId = id;
+  const [clientes, mobiliario, juegos, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/juegos/").catch(() => []), apiGet("/presupuestos/logistica/precio-por-km")]);
+  _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario; _nuevoPptoJuegos = (juegos || []); _nuevoPptoEditingId = id;
   _pptoPrecioKm = kmData?.precio_por_km || 7000;
   if (p.lugares && p.lugares.length > 0) {
-    _nuevoPptoLugares = p.lugares.map(lug => ({ nombre: lug.nombre || "", productos: (lug.productos || lug.items || []).map(it => ({ mobiliario_id: it.mobiliario_id || it.id || null, cantidad: it.cantidad || 1 })) }));
-  } else { _nuevoPptoLugares = [{ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1 }] }]; }
+    _nuevoPptoLugares = p.lugares.map(lug => ({
+      nombre: lug.nombre || "",
+      productos: (lug.productos || lug.items || []).map(it => {
+        if (it.juego_id) {
+          const jg = _nuevoPptoJuegos.find(j => j.id === it.juego_id);
+          return { juego_id: it.juego_id, cantidad: it.cantidad || 1 };
+        }
+        if (it.mobiliario_id || it.id) {
+          const mid = it.mobiliario_id || it.id;
+          return { mobiliario_id: mid, cantidad: it.cantidad || 1 };
+        }
+        return { mobiliario_id: null, cantidad: it.cantidad || 1 };
+      })
+    }));
+  } else {
+    _nuevoPptoLugares = [{ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1 }] }];
+  }
   _renderPptoModal(p);
 };
 
@@ -334,12 +414,21 @@ window.guardarEditarPresupuesto = async function(ev, id) {
   const clienteId = parseInt(document.getElementById("nppto-cliente-id")?.value) || null;
   const clienteNombre = document.getElementById("nppto-cliente-nombre")?.value || "";
   if (!clienteId && !clienteNombre) { toast("Indica un cliente", "error"); return; }
-  const lugares = _nuevoPptoLugares.map(lug => ({ nombre: lug.nombre || "Lugar", productos: lug.productos.filter(p => p.mobiliario_id).map(p => ({ mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad })) }));
+  const lugares = _nuevoPptoLugares.map(lug => ({
+    nombre: lug.nombre || "Lugar",
+    productos: lug.productos.filter(p => p.mobiliario_id || p.juego_id).map(p => {
+      if (p.juego_id) {
+        const jg = (_nuevoPptoJuegos || []).find(j => j.id === p.juego_id);
+        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad };
+      }
+      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad };
+    })
+  }));
   const calc = _calcularPptoLocal();
   const saveData = {
     cliente_id: clienteId,
     cliente_nombre: clienteNombre || (_nuevoPptoClientes.find(c => c.id === clienteId)?.nombre || ""),
-    fecha_evento: document.getElementById("nppto-fecha")?.value || new Date().toISOString().slice(0, 10),
+    fecha_evento: document.getElementById("nppto-fecha")?.value || _hoyLocal(),
     tipo_evento: document.getElementById("nppto-tipo")?.value || "",
     cantidad_invitados: parseInt(document.getElementById("nppto-invitados")?.value) || null,
     localidad: document.getElementById("nppto-localidad")?.value || "",

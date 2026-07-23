@@ -26,29 +26,41 @@ class MobiliarioOut(MobiliarioBase):
         from_attributes = True
 
 
-# ─── Juego (combo de N unidades de un mobiliario) ───
-class JuegoSave(BaseModel):
-    nombre: str
+# ─── Juego (combo de varios mobiliarios) ───
+class JuegoItemSave(BaseModel):
     mobiliario_id: int
     cantidad: int = 1
-    precio_alquiler: float = 0.0
-    descripcion: Optional[str] = ""
-    activo: bool = True
 
-class JuegoOut(JuegoSave):
+class JuegoItemOut(JuegoItemSave):
     id: int
     mobiliario_nombre: str = ""
     mobiliario_stock: int = 0
     class Config:
         from_attributes = True
 
+class JuegoSave(BaseModel):
+    nombre: str
+    precio_alquiler: float = 0.0
+    descripcion: Optional[str] = ""
+    activo: bool = True
+    items: List[JuegoItemSave] = []
+
+class JuegoOut(BaseModel):
+    id: int
+    nombre: str
+    precio_alquiler: float = 0.0
+    descripcion: str = ""
+    activo: bool = True
+    items: List[JuegoItemOut] = []
+    class Config:
+        from_attributes = True
+
 class JuegoUpdate(BaseModel):
     nombre: Optional[str] = None
-    mobiliario_id: Optional[int] = None
-    cantidad: Optional[int] = None
     precio_alquiler: Optional[float] = None
     descripcion: Optional[str] = None
     activo: Optional[bool] = None
+    items: Optional[List[JuegoItemSave]] = None
 
 
 # ─── Cliente ───
@@ -226,6 +238,7 @@ class PresupuestoResponse(BaseModel):
 class ProductoLugar(BaseModel):
     catalogo_key: str = ""
     mobiliario_id: Optional[int] = None  # alternativa: buscar por ID en vez de nombre
+    juego_id: Optional[int] = None  # combo de N unidades de un mobiliario
     cantidad: int = 1
     notas: str = ""
     precio_manual: Optional[float] = None

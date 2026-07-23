@@ -1,4 +1,32 @@
 // ─── EVENTOS ───
+
+// Helpers de fecha sin timezone issues (extrae YYYY-MM-DD[-HH:MM] del string directamente)
+const _EVT_MESES_CORTOS = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const _EVT_MESES_LARGOS = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function _evtFmtFecha(fechaStr, largo = false) {
+  if (!fechaStr) return "—";
+  const m = String(fechaStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return fechaStr;
+  const dd = m[3], mm = parseInt(m[2], 10) - 1, yyyy = m[1];
+  const meses = largo ? _EVT_MESES_LARGOS : _EVT_MESES_CORTOS;
+  return `${dd} ${meses[mm]} ${yyyy}`;
+}
+function _evtFmtHora(fechaStr) {
+  if (!fechaStr) return "";
+  const m = String(fechaStr).match(/(\d{2}):(\d{2})/);
+  if (!m) return "";
+  return `${m[1]}:${m[2]}`;
+}
+// Para <input type="datetime-local">: extrae YYYY-MM-DDTHH:MM del string sin mezclar timezones
+function _evtFechaLocalInput(fechaStr) {
+  if (!fechaStr) return "";
+  const m = String(fechaStr).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}`;
+  const dm = String(fechaStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (dm) return `${dm[1]}-${dm[2]}-${dm[3]}T00:00`;
+  return "";
+}
+
 async function loadEventos() {
   const eventos = await apiGet("/eventos/");
   const cont = document.getElementById("eventos-list");
@@ -21,7 +49,7 @@ async function loadEventos() {
     const pagoBadge = e.estado_pago === "pagado" ? "bg-green-100 text-green-700" :
                       e.estado_pago === "seña" ? "bg-yellow-100 text-yellow-700" :
                       e.estado_pago === "parcial" ? "bg-orange-100 text-orange-700" : "bg-gray-100 text-gray-600";
-    const fecha = new Date(e.fecha).toLocaleDateString("es-AR", { day:"2-digit", month:"short", year:"numeric" });
+    const fecha = _evtFmtFecha(e.fecha);
     return `<div class="bg-white rounded-lg shadow-sm border border-ivory-dark hover:shadow-md transition-shadow">
       <div class="p-4 flex items-center justify-between cursor-pointer" onclick="verEvento(${e.id})">
         <div class="flex-1 min-w-0">
@@ -50,8 +78,8 @@ window.onEventoSearch = function(val) { eventoSearch = val.trim().toLowerCase();
 
 window.verEvento = async function(id) {
   const ev = await apiGet(`/eventos/${id}`);
-  const fecha = new Date(ev.fecha).toLocaleDateString("es-AR", { day:"2-digit", month:"long", year:"numeric" });
-  const hora = new Date(ev.fecha).toLocaleTimeString("es-AR", { hour:"2-digit", minute:"2-digit" });
+  const fecha = _evtFmtFecha(ev.fecha, true);
+  const hora = _evtFmtHora(ev.fecha);
   const badge = ev.estado === "confirmado" ? "bg-primary text-on-primary" :
                 ev.estado === "reserva" ? "bg-yellow-400 text-charcoal" :
                 ev.estado === "cancelado" ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700";
@@ -140,7 +168,7 @@ window.crearEvento = async function(ev) {
 window.editarEventoModal = async function(id) {
   const ev = await apiGet(`/eventos/${id}`);
   const clientes = await apiGet("/clientes/");
-  const fechaLocal = new Date(ev.fecha).toISOString().slice(0,16);
+  const fechaLocal = _evtFechaLocalInput(ev.fecha);
   showModal(`<h3 class="font-display text-xl mb-4">Editar Evento</h3>
     <form onsubmit="guardarEvento(event, ${id})">
       <div class="space-y-3">
