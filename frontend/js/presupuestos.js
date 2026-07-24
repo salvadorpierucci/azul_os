@@ -146,24 +146,12 @@ window.openNuevoPresupuestoModal = async function() {
   _nuevoPptoEditingId = null; _renderPptoModal();
 };
 
-// ─── AJUSTE AUTOMÁTICO DE PRECIOS 3% MENSUAL ───
-// Calcula meses de diferencia entre hoy y la fecha del evento.
-// Regla: mes del evento menos mes actual (diciembre=11, julio=6 => 5 meses).
-// Si la fecha es futura, suma 3% por cada mes de diferencia.
-// Redondeo "lindo": >10000 → múltiplo de 500, >1000 → múltiplo de 100, >100 → múltiplo de 50.
+// ─── PRECIO AJUSTADO (sin ajuste mensual) ───
+// El ajuste de 3% por mes fue eliminado por petición del usuario.
+// Se mantiene la función para no romper los llamadores existentes.
 function calcularPrecioAjustado(precioBase, fechaEvento) {
   if (!precioBase || precioBase <= 0) return 0;
-  if (!fechaEvento) return _redondearPrecio(precioBase);
-  let meses = 0;
-  try {
-    const fecha = new Date(fechaEvento + "T00:00:00");
-    if (isNaN(fecha.getTime())) return _redondearPrecio(precioBase);
-    const ahora = new Date();
-    meses = (fecha.getFullYear() - ahora.getFullYear()) * 12 + (fecha.getMonth() - ahora.getMonth());
-  } catch (e) { meses = 0; }
-  if (isNaN(meses) || meses < 0) meses = 0;
-  let precio = precioBase * (1 + 0.03 * meses);
-  return _redondearPrecio(precio);
+  return _redondearPrecio(precioBase);
 }
 
 function _redondearPrecio(precio) {

@@ -5,7 +5,8 @@ from datetime import date
 from app.database import get_db
 from app.models import Mobiliario, EventoMobiliario, Evento, EstadoEvento
 from app.schemas import MobiliarioOut
-import os, uuid, shutil
+import os, uuid, io
+from PIL import Image
 
 router = APIRouter(prefix="/mobiliario", tags=["mobiliario"])
 
@@ -13,6 +14,59 @@ router = APIRouter(prefix="/mobiliario", tags=["mobiliario"])
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 UPLOAD_DIR = os.path.join(PROJECT_ROOT, "uploads", "mobiliario")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ─── COMPRESIÓN DE FOTOS ───
+# Guarda DOS versiones:
+#   - uploads/mobiliario/        → comprimida (1200px, JPEG q80) para web/app
+#   uploads/mobiliario/full/     → original sin modificar para PDF/Word
+MAX_FOTO_SIZE = 1200  # px en el lado más largo (versión web)
+JPEG_QUALITY = 80
+FULL_DIR = os.path.join(UPLOAD_DIR, "full")
+os.makedirs(FULL_DIR, exist_ok=True)
+
+
+def _procesar_y_guardar_foto(foto_file, dest_dir: str) -> str:
+    """Lee el UploadFile, guarda el original en full/ y una versión
+    comprimida (1200px JPEG q80) en dest_dir.
+    Devuelve el nombre del archivo guardado (siempre .jpg)."""
+    # Leer el contenido completo a memoria (lo necesitamos 2 veces)
+    raw = foto_file.file.read()
+    fname = f"{uuid.uuid4().hex}.jpg"
+
+    # 1) Guardar original tal cual en full/
+    full_path = os.path.join(FULL_DIR, fname)
+    with open(full_path, "wb") as f:
+        f.write(raw)
+
+    # 2) Procesar versión comprimida para web
+    img = Image.open(io.BytesIO(raw))
+    img = img.convert("RGB")
+    w, h = img.size
+    if max(w, h) > MAX_FOTO_SIZE:
+        if w >= h:
+            new_w = MAX_FOTO_SIZE
+            new_h = int(h * (MAX_FOTO_SIZE / w))
+        else:
+            new_h = MAX_FOTO_SIZE
+            new_w = int(w * (MAX_FOTO_SIZE / h))
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+    web_path = os.path.join(dest_dir, fname)
+    img.save(web_path, "JPEG", quality=JPEG_QUALITY, optimize=True)
+
+    return fname
+
+
+def _foto_full_path(foto_path: str) -> str:
+    """Devuelve la ruta a la versión original (full/) de una foto.
+    Si no existe el original, cae back a la versión comprimida."""
+    if not foto_path:
+        return ""
+    full = os.path.join(FULL_DIR, foto_path)
+    if os.path.exists(full):
+        return full
+    # fallback: versión comprimida
+    web = os.path.join(UPLOAD_DIR, foto_path)
+    return web if os.path.exists(web) else ""
 
 
 def _stock_disponible(item, db):
@@ -59,13 +113,11 @@ async def crear(
 ):
     foto_path = ""
     if foto and foto.filename:
-        ext = os.path.splitext(foto.filename)[1].lower()
-        if ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
-            fname = f"{uuid.uuid4().hex}{ext}"
-            fpath = os.path.join(UPLOAD_DIR, fname)
-            with open(fpath, "wb") as f:
-                shutil.copyfileobj(foto.file, f)
-            foto_path = fname
+        try:
+            foto_path = _procesar_y_guardar_foto(foto, UPLOAD_DIR)
+        except Exception as e:
+            print(f"[mobiliario] Error procesando foto: {e}")
+            foto_path = ""
 
     item = Mobiliario(
         nombre=nombre,
@@ -114,18 +166,16 @@ async def actualizar(
     item.activo = activo
 
     if foto and foto.filename:
-        ext = os.path.splitext(foto.filename)[1].lower()
-        if ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"]:
-            # borrar foto vieja si existe
-            if item.foto_path:
-                old = os.path.join(UPLOAD_DIR, item.foto_path)
-                if os.path.exists(old):
-                    os.remove(old)
-            fname = f"{uuid.uuid4().hex}{ext}"
-            fpath = os.path.join(UPLOAD_DIR, fname)
-            with open(fpath, "wb") as f:
-                shutil.copyfileobj(foto.file, f)
-            item.foto_path = fname
+        # borrar foto vieja si existe (web + full)
+        if item.foto_path:
+            for old_path in [os.path.join(UPLOAD_DIR, item.foto_path),
+                             os.path.join(FULL_DIR, item.foto_path)]:
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+        try:
+            item.foto_path = _procesar_y_guardar_foto(foto, UPLOAD_DIR)
+        except Exception as e:
+            print(f"[mobiliario] Error procesando foto: {e}")
 
     db.commit()
     db.refresh(item)

@@ -99,38 +99,11 @@ def _redondear_precio(precio: float) -> float:
 
 
 def calcular_precio_ajustado(precio_base: float, fecha_evento: str) -> float:
-    """Aplica el ajuste de 3% por cada mes de diferencia entre hoy y la fecha
-    del evento. Si el evento es en el mismo mes o en el pasado, devuelve el
-    precio base redondeado.
-
-    El precio en la BD es el precio del mes actual; el ajuste SOLO aplica al
-    mostrar/calcular presupuestos, NO se modifica el precio en la BD.
+    """Devuelve el precio base redondeado, sin ajuste mensual.
+    El ajuste de 3% por mes fue eliminado por petición del usuario.
+    Se mantiene la firma para no romper los llamadores existentes.
     """
-    if not fecha_evento or not precio_base:
-        return _redondear_precio(precio_base)
-
-    hoy = _date.today()
-    fecha = None
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d/%m/%y"):
-        try:
-            fecha = _dt.strptime(str(fecha_evento).strip(), fmt).date()
-            break
-        except (ValueError, TypeError):
-            continue
-    if not fecha:
-        return _redondear_precio(precio_base)
-
-    # Si el evento está en el mismo mes o en el pasado, sin ajuste
-    if fecha.year < hoy.year or (fecha.year == hoy.year and fecha.month <= hoy.month):
-        return _redondear_precio(precio_base)
-
-    # Meses completos de diferencia (julio→diciembre = 5)
-    meses = (fecha.year - hoy.year) * 12 + (fecha.month - hoy.month)
-    if meses <= 0:
-        return _redondear_precio(precio_base)
-
-    precio_ajustado = precio_base * (1 + 0.03 * meses)
-    return _redondear_precio(precio_ajustado)
+    return _redondear_precio(precio_base)
 
 
 # ─── LOGÍSTICA ───
@@ -453,7 +426,9 @@ def _lookup_mob_prices(db: Session) -> dict:
 
 def _lookup_mob_fotos(db: Session) -> dict:
     """Retorna {nombre_mobiliario: ruta_absoluta_foto} para los que tienen foto.
+    Usa la versión ORIGINAL (full/) si existe, sino cae back a la comprimida.
     Tolera que el directorio uploads/mobiliario no exista (otra PC sin fotos copiadas)."""
+    from app.routers.mobiliario import _foto_full_path
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
     upload_dir = os.path.join(project_root, "uploads", "mobiliario")
     if not os.path.isdir(upload_dir):
@@ -462,8 +437,8 @@ def _lookup_mob_fotos(db: Session) -> dict:
     fotos = {}
     for m in all_mob:
         if m.foto_path:
-            foto_path = os.path.join(upload_dir, m.foto_path)
-            if os.path.exists(foto_path):
+            foto_path = _foto_full_path(m.foto_path)
+            if foto_path and os.path.exists(foto_path):
                 fotos[m.nombre] = foto_path
     return fotos
 
