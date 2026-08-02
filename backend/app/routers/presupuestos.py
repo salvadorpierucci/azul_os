@@ -428,6 +428,16 @@ def _lookup_mob_prices(db: Session) -> dict:
     return {m.nombre: m.precio_alquiler for m in all_mob}
 
 
+def _safe_filename(name: str) -> str:
+    """Limpia un string para usar como nombre de archivo seguro."""
+    import re as _re
+    # Reemplazar caracteres no válidos por underscore
+    safe = _re.sub(r'[<>:"/\\|?*#]', '_', name.strip())
+    # Colapsar espacios múltiples
+    safe = _re.sub(r'\s+', '_', safe)
+    return safe or "presupuesto"
+
+
 def _lookup_mob_fotos(db: Session) -> dict:
     """Retorna {nombre_mobiliario: ruta_absoluta_foto} para los que tienen foto.
     Usa la versión ORIGINAL (full/) si existe, sino cae back a la comprimida.
@@ -455,8 +465,9 @@ def presupuesto_pdf_completo(ppto_id: int, db: Session = Depends(get_db)):
         mob_fotos = _lookup_mob_fotos(db)
         from app.word_gen import generate_word_completo
         buf = generate_word_completo(ppto, lugares_raw, mob_prices, mob_fotos)
+        _safe_name = _safe_filename(ppto.get("nombre") or ppto.get("cliente_nombre") or f"presupuesto_{ppto_id}")
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                 headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_completo.docx"'})
+                                 headers={"Content-Disposition": f'attachment; filename="{_safe_name}_completo.docx"'})
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -470,8 +481,9 @@ def presupuesto_pdf_cliente(ppto_id: int, db: Session = Depends(get_db)):
         mob_fotos = _lookup_mob_fotos(db)
         from app.word_gen import generate_word_cliente
         buf = generate_word_cliente(ppto, lugares_raw, mob_fotos)
+        _safe_name = _safe_filename(ppto.get("nombre") or ppto.get("cliente_nombre") or f"presupuesto_{ppto_id}")
         return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                 headers={"Content-Disposition": f'attachment; filename="presupuesto_{ppto_id}_cliente.docx"'})
+                                 headers={"Content-Disposition": f'attachment; filename="{_safe_name}.docx"'})
     except Exception as e:
         import traceback
         traceback.print_exc()

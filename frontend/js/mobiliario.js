@@ -63,17 +63,17 @@ function _renderMobiliarioGrid() {
     const stockLabel = mobFechaDisponibilidad
       ? `Disp: ${stockDisp}/${m.stock_total}`
       : `Stock: ${m.stock_disponible}/${m.stock_total}`;
-    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group" draggable="true" data-mob-id="${m.id}" data-mob-idx="${idx}" ondragstart="_mobDragStart(event, ${m.id})" ondragover="_mobDragOver(event)" ondrop="_mobDrop(event, ${m.id})">
+    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group" data-mob-id="${m.id}">
       <div class="h-32 bg-ivory-dark flex items-center justify-center overflow-hidden relative cursor-pointer" onclick="editMobiliario(${m.id})">
-        ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover"/>` : '<span class="material-symbols-outlined text-4xl text-charcoal/20">chair</span>'}
+        ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover" ondragstart="return false"/>` : '<span class="material-symbols-outlined text-4xl text-charcoal/20">chair</span>'}
         <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
           <button onclick="event.stopPropagation();editMobiliario(${m.id})" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-primary hover:text-on-primary transition" title="Editar"><span class="material-symbols-outlined text-sm">edit</span></button>
           <button onclick="event.stopPropagation();confirmarEliminarMobiliario(${m.id},'${m.nombre.replace(/'/g,"\\'")}')" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
         </div>
       </div>
-      <div class="p-3 cursor-pointer flex items-start gap-2" onclick="editMobiliario(${m.id})">
-        <span class="material-symbols-outlined text-xs text-charcoal/30 mt-0.5 cursor-grab active:cursor-grabbing flex-shrink-0" title="Arrastrar para reordenar">drag_indicator</span>
-        <div class="flex-1 min-w-0">
+      <div class="p-3 flex items-start gap-2">
+        <span class="material-symbols-outlined text-xs text-charcoal/30 mt-0.5 cursor-grab active:cursor-grabbing flex-shrink-0 drag-handle" title="Arrastrar para reordenar" draggable="true" data-mob-id="${m.id}" ondragstart="_mobDragStart(event, ${m.id})" ondragend="_mobDragEnd(event)">drag_indicator</span>
+        <div class="flex-1 min-w-0 cursor-pointer" onclick="editMobiliario(${m.id})">
           <p class="font-medium text-sm truncate">${m.nombre}</p>
           <p class="text-xs text-charcoal/50">${m.categoria}</p>
           ${m.descripcion ? `<p class="text-xs text-charcoal/40 mt-1 line-clamp-2">${m.descripcion}</p>` : ''}
@@ -85,6 +85,14 @@ function _renderMobiliarioGrid() {
       </div>
     </div>`;
   }).join("");
+  // Adjuntar drag&drop listeners a cada card
+  grid.querySelectorAll('.card-mob').forEach(card => {
+    card.addEventListener('dragover', _mobDragOver);
+    card.addEventListener('drop', function(ev) {
+      const targetId = parseInt(this.getAttribute('data-mob-id'));
+      _mobDrop(ev, targetId);
+    });
+  });
 }
 
 // ─── DRAG & DROP para reordenar mobiliario ───
@@ -95,7 +103,13 @@ window._mobDragStart = function(ev, mobId) {
   ev.dataTransfer.effectAllowed = "move";
   ev.dataTransfer.setData("text/plain", String(mobId));
   // Añadir clase visual
-  ev.target.closest('.card-mob')?.classList.add('opacity-50');
+  const card = ev.target.closest('.card-mob');
+  if (card) card.classList.add('opacity-50');
+};
+
+window._mobDragEnd = function(ev) {
+  // Limpiar todas las clases opacity-50
+  document.querySelectorAll('.card-mob.opacity-50').forEach(c => c.classList.remove('opacity-50'));
 };
 
 window._mobDragOver = function(ev) {
@@ -105,16 +119,21 @@ window._mobDragOver = function(ev) {
 
 window._mobDrop = async function(ev, targetMobId) {
   ev.preventDefault();
-  if (_mobDragId == null || _mobDragId === targetMobId) { _mobDragId = null; _renderMobiliarioGrid(); return; }
+  ev.stopPropagation();
+  // Limpiar opacidad
+  document.querySelectorAll('.card-mob.opacity-50').forEach(c => c.classList.remove('opacity-50'));
+  if (_mobDragId == null) return;
+  const srcId = _mobDragId;
+  _mobDragId = null;
+  if (srcId === targetMobId) return;
 
   // Reordenar en el cache local
-  const srcIdx = _mobItemsCache.findIndex(m => m.id === _mobDragId);
+  const srcIdx = _mobItemsCache.findIndex(m => m.id === srcId);
   const dstIdx = _mobItemsCache.findIndex(m => m.id === targetMobId);
-  if (srcIdx === -1 || dstIdx === -1) { _mobDragId = null; return; }
+  if (srcIdx === -1 || dstIdx === -1) return;
 
   const [moved] = _mobItemsCache.splice(srcIdx, 1);
   _mobItemsCache.splice(dstIdx, 0, moved);
-  _mobDragId = null;
 
   // Enviar el nuevo orden al backend
   try {
