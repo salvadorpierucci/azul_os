@@ -68,6 +68,9 @@ def _enriquecer_productos_con_precios(lugares, db: Session, fecha_evento: str) -
             enriched_prod["precio_unitario"] = precio
             enriched_prod["subtotal"] = precio * cantidad
             enriched_prod["nombre"] = p.get("catalogo_key", "") or p.get("nombre", "")
+            # Agregar descripción del mobiliario de catálogo (para Word y detalle)
+            mob_item = mob_by_id.get(p.get("mobiliario_id")) or mob_by_nombre.get(p.get("catalogo_key", ""))
+            enriched_prod["descripcion"] = mob_item.descripcion if mob_item and mob_item.descripcion else p.get("descripcion", "")
             lug_dict["productos"].append(enriched_prod)
         enriched.append(lug_dict)
     return enriched
@@ -413,6 +416,7 @@ def _get_ppto_with_lugares(ppto_id: int, db: Session):
         "subtotal_mobiliario": p.subtotal_mobiliario,
         "costo_logistica": p.costo_logistica,
         "costo_armado": getattr(p, 'costo_armado', None) or 0.0,
+        "descuento": getattr(p, 'descuento', None) or 0.0,
         "total": p.total,
         "estado": p.estado,
     }
@@ -535,6 +539,7 @@ def guardar_presupuesto(data: PresupuestoSave, db: Session = Depends(get_db)):
         subtotal_mobiliario=data.subtotal_mobiliario,
         costo_logistica=data.costo_logistica,
         costo_armado=data.costo_armado,
+        descuento=data.descuento,
         total=data.total,
         whatsapp_text=data.whatsapp_text,
         estado=data.estado,
@@ -564,6 +569,7 @@ def actualizar_presupuesto(ppto_id: int, data: PresupuestoSave, db: Session = De
     p.subtotal_mobiliario = data.subtotal_mobiliario
     p.costo_logistica = data.costo_logistica
     p.costo_armado = data.costo_armado
+    p.descuento = data.descuento
     p.total = data.total
     p.whatsapp_text = data.whatsapp_text
     p.estado = data.estado
@@ -618,7 +624,7 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
         estado_pago="pendiente",
         costo_traslado=p.costo_logistica,
         costo_mano_obra=p.costo_armado or 0.0,
-        monto_total=p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0),
+        monto_total=p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0) - (p.descuento or 0),
     )
     db.add(evento)
     db.commit()
@@ -675,7 +681,7 @@ def convertir_a_evento(ppto_id: int, db: Session = Depends(get_db)):
     db.flush()
     # Usar el total del presupuesto como monto_total del evento
     # (el presupuesto ya tiene los precios correctos incluyendo juegos)
-    evento.monto_total = p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0)
+    evento.monto_total = p.subtotal_mobiliario + p.costo_logistica + (p.costo_armado or 0) - (p.descuento or 0)
 
     p.evento_id = evento.id
     p.estado = "confirmado"
@@ -713,6 +719,7 @@ def _presupuesto_to_out(p: Presupuesto, db: Session = None) -> PresupuestoDBOut:
         subtotal_mobiliario=p.subtotal_mobiliario,
         costo_logistica=p.costo_logistica,
         costo_armado=p.costo_armado or 0.0,
+        descuento=getattr(p, 'descuento', 0.0) or 0.0,
         total=p.total,
         whatsapp_text=p.whatsapp_text,
         estado=p.estado,

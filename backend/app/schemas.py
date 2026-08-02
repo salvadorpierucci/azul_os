@@ -298,6 +298,7 @@ class PresupuestoSave(BaseModel):
     subtotal_mobiliario: float = 0.0
     costo_logistica: float = 0.0  # traslado
     costo_armado: float = 0.0  # armado y desarme
+    descuento: float = 0.0  # descuento aplicado al total
     total: float = 0.0
     whatsapp_text: str = ""
     estado: str = "borrador"
@@ -317,6 +318,7 @@ class PresupuestoDBOut(BaseModel):
     subtotal_mobiliario: float = 0.0
     costo_logistica: float = 0.0  # traslado
     costo_armado: float = 0.0  # armado y desarme
+    descuento: float = 0.0  # descuento aplicado al total
     total: float = 0.0
     whatsapp_text: str = ""
     estado: str = "borrador"

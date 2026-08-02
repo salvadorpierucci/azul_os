@@ -29,6 +29,7 @@ class Mobiliario(Base):
     descripcion = Column(Text, default="")
     precio_alquiler = Column(Float, nullable=False)  # precio por evento
     stock_total = Column(Integer, nullable=False, default=1)
+    orden = Column(Integer, default=0)  # orden visual (drag & drop)
     foto_path = Column(String(500), default="")  # ruta relativa al archivo subido
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
@@ -151,6 +152,7 @@ class Presupuesto(Base):
     costo_logistica = Column(Float, default=0.0)  # traslado
     costo_armado = Column(Float, default=0.0)  # armado y desarme
     total = Column(Float, default=0.0)
+    descuento = Column(Float, default=0.0)  # descuento aplicado al total
     whatsapp_text = Column(Text, default="")
     estado = Column(String(30), default="borrador")  # borrador, enviado, confirmado, cancelado
     evento_id = Column(Integer, ForeignKey("evento.id"), nullable=True)  # si se convirtió en evento

@@ -5,10 +5,14 @@ from datetime import date
 from app.database import get_db
 from app.models import Mobiliario, EventoMobiliario, Evento, EstadoEvento
 from app.schemas import MobiliarioOut
+from pydantic import BaseModel
 import os, uuid, io
 from PIL import Image
 
 router = APIRouter(prefix="/mobiliario", tags=["mobiliario"])
+
+class ReordenarRequest(BaseModel):
+    orden: list[int]  # lista de IDs en el nuevo orden
 
 # backend/app/routers/mobiliario.py → subir 4 niveles hasta repo root
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -96,7 +100,7 @@ def _mobiliario_out(item, db):
 
 @router.get("/", response_model=List[MobiliarioOut])
 def listar(db: Session = Depends(get_db)):
-    items = db.query(Mobiliario).filter(Mobiliario.activo == True).all()
+    items = db.query(Mobiliario).filter(Mobiliario.activo == True).order_by(Mobiliario.orden, Mobiliario.nombre).all()
     return [_mobiliario_out(i, db) for i in items]
 
 
@@ -140,6 +144,17 @@ def obtener(item_id: int, db: Session = Depends(get_db)):
     if not item:
         raise HTTPException(404, "Mobiliario no encontrado")
     return _mobiliario_out(item, db)
+
+
+@router.put("/reordenar/")
+def reordenar(data: ReordenarRequest, db: Session = Depends(get_db)):
+    """Actualiza el campo `orden` de cada mobiliario según la lista de IDs."""
+    for i, mob_id in enumerate(data.orden):
+        mob = db.query(Mobiliario).filter(Mobiliario.id == mob_id).first()
+        if mob:
+            mob.orden = i
+    db.commit()
+    return {"ok": True, "reordenados": len(data.orden)}
 
 
 @router.put("/{item_id}", response_model=MobiliarioOut)
@@ -193,6 +208,8 @@ def eliminar(item_id: int, db: Session = Depends(get_db)):
 
 
 # ─── DISPONIBILIDAD POR FECHA ───
+
+
 @router.get("/disponibilidad/{fecha}")
 def consultar_disponibilidad(fecha: date, db: Session = Depends(get_db)):
     """Devuelve el mobiliario disponible para una fecha dada.

@@ -30,39 +30,7 @@ async function loadMobiliario() {
     fechaInput.value = mobFechaDisponibilidad;
   }
 
-  const filtered = mobFilter ? items.filter(i => i.categoria === mobFilter) : items;
-  const searched = mobSearchQuery
-    ? filtered.filter(i => (i.nombre || "").toLowerCase().includes(mobSearchQuery.toLowerCase()) || (i.categoria || "").toLowerCase().includes(mobSearchQuery.toLowerCase()))
-    : filtered;
-  const grid = document.getElementById("mobiliario-grid");
-  grid.innerHTML = searched.map(m => {
-    const fotoUrl = m.foto_path ? `/uploads/mobiliario/${m.foto_path}` : "";
-    // Stock a mostrar: si hay fecha, usar disponibilidad; sino stock total
-    const stockDisp = mobFechaDisponibilidad
-      ? (typeof _mobDisponibilidadMap[m.id] === "number" ? _mobDisponibilidadMap[m.id] : m.stock_disponible)
-      : m.stock_disponible;
-    const stockClass = stockDisp <= 0 ? 'text-red-600 font-bold' : stockDisp <= 1 ? 'text-red-500' : 'text-green-600';
-    const stockLabel = mobFechaDisponibilidad
-      ? `Disp: ${stockDisp}/${m.stock_total}`
-      : `Stock: ${m.stock_disponible}/${m.stock_total}`;
-    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group">
-      <div class="h-32 bg-ivory-dark flex items-center justify-center overflow-hidden relative cursor-pointer" onclick="editMobiliario(${m.id})">
-        ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover"/>` : '<span class="material-symbols-outlined text-4xl text-charcoal/20">chair</span>'}
-        <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-          <button onclick="event.stopPropagation();editMobiliario(${m.id})" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-primary hover:text-on-primary transition" title="Editar"><span class="material-symbols-outlined text-sm">edit</span></button>
-          <button onclick="event.stopPropagation();confirmarEliminarMobiliario(${m.id},'${m.nombre.replace(/'/g,"\\'")}')" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
-        </div>
-      </div>
-      <div class="p-3 cursor-pointer" onclick="editMobiliario(${m.id})">
-        <p class="font-medium text-sm truncate">${m.nombre}</p>
-        <p class="text-xs text-charcoal/50">${m.categoria}</p>
-        <div class="flex justify-between mt-2 items-center">
-          <span class="text-sm font-display text-navy">$${m.precio_alquiler?.toLocaleString("es-AR")}</span>
-          <span class="text-xs ${stockClass}">${stockLabel}</span>
-        </div>
-      </div>
-    </div>`;
-  }).join("");
+  _renderMobiliarioGrid();
 }
 
 window.setMobFilter = function(f) { mobFilter = f; _renderMobiliarioGrid(); };
@@ -82,9 +50,11 @@ function _renderMobiliarioGrid() {
   const searched = mobSearchQuery
     ? filtered.filter(i => (i.nombre || "").toLowerCase().includes(mobSearchQuery.toLowerCase()) || (i.categoria || "").toLowerCase().includes(mobSearchQuery.toLowerCase()))
     : filtered;
+  // Ordenar alfabéticamente
+  const sorted = [...searched].sort((a, b) => (a.nombre || "").toLowerCase().localeCompare((b.nombre || "").toLowerCase()));
   const grid = document.getElementById("mobiliario-grid");
   if (!grid) return;
-  grid.innerHTML = searched.map(m => {
+  grid.innerHTML = sorted.map((m, idx) => {
     const fotoUrl = m.foto_path ? `/uploads/mobiliario/${m.foto_path}` : "";
     const stockDisp = mobFechaDisponibilidad
       ? (typeof _mobDisponibilidadMap[m.id] === "number" ? _mobDisponibilidadMap[m.id] : m.stock_disponible)
@@ -93,7 +63,7 @@ function _renderMobiliarioGrid() {
     const stockLabel = mobFechaDisponibilidad
       ? `Disp: ${stockDisp}/${m.stock_total}`
       : `Stock: ${m.stock_disponible}/${m.stock_total}`;
-    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group">
+    return `<div class="card-mob bg-white rounded-lg shadow-sm border border-ivory-dark overflow-hidden hover:shadow-md transition-shadow group" draggable="true" data-mob-id="${m.id}" data-mob-idx="${idx}" ondragstart="_mobDragStart(event, ${m.id})" ondragover="_mobDragOver(event)" ondrop="_mobDrop(event, ${m.id})">
       <div class="h-32 bg-ivory-dark flex items-center justify-center overflow-hidden relative cursor-pointer" onclick="editMobiliario(${m.id})">
         ${fotoUrl ? `<img src="${fotoUrl}" class="w-full h-full object-cover"/>` : '<span class="material-symbols-outlined text-4xl text-charcoal/20">chair</span>'}
         <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -101,17 +71,64 @@ function _renderMobiliarioGrid() {
           <button onclick="event.stopPropagation();confirmarEliminarMobiliario(${m.id},'${m.nombre.replace(/'/g,"\\'")}')" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
         </div>
       </div>
-      <div class="p-3 cursor-pointer" onclick="editMobiliario(${m.id})">
-        <p class="font-medium text-sm truncate">${m.nombre}</p>
-        <p class="text-xs text-charcoal/50">${m.categoria}</p>
-        <div class="flex justify-between mt-2 items-center">
-          <span class="text-sm font-display text-navy">$${m.precio_alquiler?.toLocaleString("es-AR")}</span>
-          <span class="text-xs ${stockClass}">${stockLabel}</span>
+      <div class="p-3 cursor-pointer flex items-start gap-2" onclick="editMobiliario(${m.id})">
+        <span class="material-symbols-outlined text-xs text-charcoal/30 mt-0.5 cursor-grab active:cursor-grabbing flex-shrink-0" title="Arrastrar para reordenar">drag_indicator</span>
+        <div class="flex-1 min-w-0">
+          <p class="font-medium text-sm truncate">${m.nombre}</p>
+          <p class="text-xs text-charcoal/50">${m.categoria}</p>
+          ${m.descripcion ? `<p class="text-xs text-charcoal/40 mt-1 line-clamp-2">${m.descripcion}</p>` : ''}
+          <div class="flex justify-between mt-2 items-center">
+            <span class="text-sm font-display text-navy">$${m.precio_alquiler?.toLocaleString("es-AR")}</span>
+            <span class="text-xs ${stockClass}">${stockLabel}</span>
+          </div>
         </div>
       </div>
     </div>`;
   }).join("");
 }
+
+// ─── DRAG & DROP para reordenar mobiliario ───
+let _mobDragId = null;
+
+window._mobDragStart = function(ev, mobId) {
+  _mobDragId = mobId;
+  ev.dataTransfer.effectAllowed = "move";
+  ev.dataTransfer.setData("text/plain", String(mobId));
+  // Añadir clase visual
+  ev.target.closest('.card-mob')?.classList.add('opacity-50');
+};
+
+window._mobDragOver = function(ev) {
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = "move";
+};
+
+window._mobDrop = async function(ev, targetMobId) {
+  ev.preventDefault();
+  if (_mobDragId == null || _mobDragId === targetMobId) { _mobDragId = null; _renderMobiliarioGrid(); return; }
+
+  // Reordenar en el cache local
+  const srcIdx = _mobItemsCache.findIndex(m => m.id === _mobDragId);
+  const dstIdx = _mobItemsCache.findIndex(m => m.id === targetMobId);
+  if (srcIdx === -1 || dstIdx === -1) { _mobDragId = null; return; }
+
+  const [moved] = _mobItemsCache.splice(srcIdx, 1);
+  _mobItemsCache.splice(dstIdx, 0, moved);
+  _mobDragId = null;
+
+  // Enviar el nuevo orden al backend
+  try {
+    const orden = _mobItemsCache.map(m => m.id);
+    await apiPut("/mobiliario/reordenar/", { orden });
+  } catch (e) {
+    console.error("Error al reordenar mobiliario:", e);
+    // Recargar desde el backend para restaurar orden correcto
+    const items = await apiGet("/mobiliario/");
+    _mobItemsCache = items;
+  }
+  _renderMobiliarioGrid();
+  toast("Mobiliario reordenado");
+};
 
 window.setMobFechaDisponibilidad = function(fecha) {
   mobFechaDisponibilidad = fecha || "";

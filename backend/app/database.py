@@ -41,6 +41,15 @@ def _migrate_add_columns():
         if "nombre" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE presupuesto ADD COLUMN nombre VARCHAR(200) DEFAULT ''"))
+        if "descuento" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE presupuesto ADD COLUMN descuento FLOAT DEFAULT 0.0"))
+    # Tabla mobiliario: agregar orden
+    if "mobiliario" in insp.get_table_names():
+        cols_mob = [c["name"] for c in insp.get_columns("mobiliario")]
+        if "orden" not in cols_mob:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE mobiliario ADD COLUMN orden INTEGER DEFAULT 0"))
 
 
 def init_db():

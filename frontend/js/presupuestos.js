@@ -79,13 +79,20 @@ window.verPresupuestoDetalle = async function(id) {
     lugaresHtml = `<div class="mt-4 border-t border-ivory-dark pt-4"><h4 class="font-medium mb-3 text-sm uppercase text-charcoal/50 tracking-wider">Mobiliario por Lugar</h4><div class="space-y-4">`;
     p.lugares.forEach(lug => {
       const items = lug.productos || lug.items || [];
+      // Ordenar alfabéticamente
+      const sorted = [...items].sort((a, b) => {
+        const na = (a.nombre || a.catalogo_key || "").toLowerCase();
+        const nb = (b.nombre || b.catalogo_key || "").toLowerCase();
+        return na.localeCompare(nb);
+      });
       lugaresHtml += `<div class="bg-ivory-dark/30 rounded-lg p-3"><p class="font-medium text-sm text-navy mb-2">${lug.nombre || "Sin nombre"}</p><div class="space-y-1">`;
-      if (items.length > 0) {
-        items.forEach(it => {
+      if (sorted.length > 0) {
+        sorted.forEach(it => {
           const nombre = it.nombre || it.catalogo_key || "Mobiliario";
           const cant = it.cantidad || 1;
           const subtotal = it.subtotal || (cant * (it.precio_unitario || 0));
-          lugaresHtml += `<div class="flex justify-between text-sm py-1 border-b border-ivory-dark/50 last:border-0"><span>${cant}x ${nombre}</span><span class="font-medium">$${subtotal.toLocaleString("es-AR")}</span></div>`;
+          const desc = it.descripcion || "";
+          lugaresHtml += `<div class="flex justify-between text-sm py-1 border-b border-ivory-dark/50 last:border-0"><div><span>${cant}x ${nombre}</span>${desc ? `<p class="text-xs text-charcoal/40">${desc}</p>` : ''}</div><span class="font-medium">$${subtotal.toLocaleString("es-AR")}</span></div>`;
         });
       } else { lugaresHtml += `<p class="text-sm text-charcoal/40">Sin items</p>`; }
       lugaresHtml += `</div></div>`;
@@ -108,6 +115,7 @@ window.verPresupuestoDetalle = async function(id) {
       <div class="flex justify-between"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${(p.subtotal_mobiliario || 0).toLocaleString("es-AR")}</span></div>
       <div class="flex justify-between"><span class="text-charcoal/50">Traslado${p.distancia_km ? " (" + p.distancia_km + "km)" : ""}</span><span>$${(p.costo_logistica || 0).toLocaleString("es-AR")}</span></div>
       ${(p.costo_armado || 0) > 0 ? `<div class="flex justify-between"><span class="text-charcoal/50">Armado y desarme</span><span>$${(p.costo_armado || 0).toLocaleString("es-AR")}</span></div>` : ""}
+      ${(p.descuento || 0) > 0 ? `<div class="flex justify-between"><span class="text-red-500">Descuento</span><span class="text-red-500">-$${(p.descuento || 0).toLocaleString("es-AR")}</span></div>` : ""}
       <div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${(p.total || 0).toLocaleString("es-AR")}</span></div>
     </div>
     <div class="mt-5 flex flex-wrap gap-2">
@@ -142,7 +150,7 @@ window.openNuevoPresupuestoModal = async function() {
   const [clientes, mobiliario, juegos, kmData] = await Promise.all([apiGet("/clientes/"), apiGet("/mobiliario/"), apiGet("/juegos/").catch(() => []), apiGet("/presupuestos/logistica/precio-por-km")]);
   _nuevoPptoClientes = clientes; _nuevoPptoMobiliario = mobiliario; _nuevoPptoJuegos = (juegos || []);
   _pptoPrecioKm = kmData?.precio_por_km || 7000;
-  _nuevoPptoLugares = [{ nombre: "", productos: [{ tipo: "mob", id: null, cantidad: 1, label: "" }] }];
+  _nuevoPptoLugares = [{ nombre: "", productos: [{ tipo: "mob", id: null, cantidad: 1, precio_manual: null, label: "" }] }];
   _nuevoPptoEditingId = null; _renderPptoModal();
 };
 
@@ -179,12 +187,15 @@ function _calcularPptoLocal() {
     lug.productos.forEach(p => {
       if (p.juego_id) {
         const jg = juegoById[p.juego_id];
-        if (jg) subtotalMob += (jg.precio_alquiler || 0) * (p.cantidad || 1);
+        if (jg) {
+          const precioBase = p.precio_manual != null ? p.precio_manual : jg.precio_alquiler;
+          subtotalMob += precioBase * (p.cantidad || 1);
+        }
       } else if (p.mobiliario_id) {
         const mob = mobById[p.mobiliario_id];
         if (mob) {
-          const precioAjustado = calcularPrecioAjustado(mob.precio_alquiler, fecha);
-          subtotalMob += precioAjustado * (p.cantidad || 1);
+          const precioBase = p.precio_manual != null ? p.precio_manual : mob.precio_alquiler;
+          subtotalMob += precioBase * (p.cantidad || 1);
         }
       }
     });
@@ -192,13 +203,15 @@ function _calcularPptoLocal() {
   let costoLog = 0;
   if (dist > 0) { costoLog = dist * (_pptoPrecioKm || 7000); }
   const costoArmado = parseFloat(document.getElementById("nppto-armado")?.value) || 0;
-  return { subtotalMob, costoLog, costoArmado, total: subtotalMob + costoLog + costoArmado };
+  const descuento = parseFloat(document.getElementById("nppto-descuento")?.value) || 0;
+  const total = subtotalMob + costoLog + costoArmado - descuento;
+  return { subtotalMob, costoLog, costoArmado, descuento, total: Math.max(0, total) };
 }
 
 function _actualizarTotalesPpto() {
   const calc = _calcularPptoLocal();
   const el = document.getElementById("nppto-totales");
-  if (el) { el.innerHTML = `<div class="flex justify-between text-sm"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${calc.subtotalMob.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Traslado</span><span>$${calc.costoLog.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Armado y desarme</span><span>$${calc.costoArmado.toLocaleString("es-AR")}</span></div><div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${calc.total.toLocaleString("es-AR")}</span></div>`; }
+  if (el) { el.innerHTML = `<div class="flex justify-between text-sm"><span class="text-charcoal/50">Subtotal Mobiliario</span><span>$${calc.subtotalMob.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Traslado</span><span>$${calc.costoLog.toLocaleString("es-AR")}</span></div><div class="flex justify-between text-sm"><span class="text-charcoal/50">Armado y desarme</span><span>$${calc.costoArmado.toLocaleString("es-AR")}</span></div>${calc.descuento > 0 ? `<div class="flex justify-between text-sm"><span class="text-red-500">Descuento</span><span class="text-red-500">-$${calc.descuento.toLocaleString("es-AR")}</span></div>` : ''}<div class="flex justify-between font-display text-lg border-t border-ivory-dark pt-1 mt-1"><span>Total</span><span class="text-navy">$${calc.total.toLocaleString("es-AR")}</span></div>`; }
   const dist = parseFloat(document.getElementById("nppto-distancia")?.value) || 0;
   let logCost = dist > 0 ? dist * (_pptoPrecioKm || 7000) : 0;
   const logLabel = document.getElementById("nppto-logistica-cost");
@@ -223,13 +236,16 @@ function _renderPptoLugaresOnly() {
         ? (selJuego ? `${selJuego.nombre} – $${(selJuego.precio_alquiler||0).toLocaleString("es-AR")}` : "Juego")
         : (selMob ? `${selMob.nombre} – $${selMob.precio_alquiler?.toLocaleString("es-AR")}` : "");
       const iconTag = esJuego ? '<span class="material-symbols-outlined text-xs text-charcoal/40 mr-1">inventory_2</span>' : '';
+      const precioManual = prod.precio_manual != null ? prod.precio_manual : "";
       html += `<div class="flex gap-2 items-center">
+        <span class="material-symbols-outlined text-xs text-charcoal/30 cursor-grab active:cursor-grabbing" draggable="true" ondragstart="_pptoDragStart(event, ${li}, ${pi})" ondragover="_pptoDragOver(event)" ondrop="_pptoDrop(event, ${li}, ${pi})">drag_indicator</span>
         <div class="relative flex-1">
           <input type="text" value="${selLabel}" placeholder="Buscar mobiliario o juego..." autocomplete="off" oninput="_pptoMobSearch(this, ${li}, ${pi})" class="w-full border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none pl-8" />
           <span class="material-symbols-outlined text-xs text-charcoal/30 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none">${esJuego ? 'inventory_2' : 'chair'}</span>
           <div class="absolute z-50 left-0 right-0 mt-1 bg-white border border-ivory-dark rounded-lg shadow-lg max-h-48 overflow-y-auto hidden" data-ppto-dropdown="1"></div>
         </div>
-        <input type="number" value="${prod.cantidad}" min="1" onchange="_nuevoPptoLugares[${li}].productos[${pi}].cantidad=parseInt(this.value)||1;_actualizarTotalesPpto()" class="w-20 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" placeholder="Cant"/>
+        <input type="number" value="${prod.cantidad}" min="1" onchange="_nuevoPptoLugares[${li}].productos[${pi}].cantidad=parseInt(this.value)||1;_actualizarTotalesPpto()" class="w-16 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" placeholder="Cant" title="Cantidad"/>
+        <input type="number" value="${precioManual}" min="0" step="100" placeholder="$ manual" onchange="_pptoSetPrecioManual(${li},${pi},this.value)" class="w-24 border border-ivory-dark rounded-lg p-2 text-sm focus:border-primary outline-none" title="Precio manual (vacío = precio de catálogo)"/>
         ${lug.productos.length > 1 ? `<button type="button" onclick="_removeLugarProducto(${li},${pi})" class="text-red-400 hover:text-red-600 transition"><span class="material-symbols-outlined text-sm">close</span></button>` : ''}
       </div>`;
     });
@@ -237,6 +253,37 @@ function _renderPptoLugaresOnly() {
   });
   cont.innerHTML = html; _actualizarTotalesPpto();
 }
+
+// Precio manual por ítem
+window._pptoSetPrecioManual = function(li, pi, val) {
+  const v = val.trim();
+  _nuevoPptoLugares[li].productos[pi].precio_manual = v ? parseFloat(v) : null;
+  _actualizarTotalesPpto();
+};
+
+// Drag & drop entre productos del presupuesto
+let _pptoDragLi = null, _pptoDragPi = null;
+window._pptoDragStart = function(ev, li, pi) {
+  _pptoDragLi = li; _pptoDragPi = pi;
+  ev.dataTransfer.effectAllowed = "move";
+  ev.dataTransfer.setData("text/plain", `${li},${pi}`);
+};
+window._pptoDragOver = function(ev) {
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = "move";
+};
+window._pptoDrop = function(ev, li, pi) {
+  ev.preventDefault();
+  if (_pptoDragLi == null || _pptoDragPi == null) return;
+  if (_pptoDragLi === li && _pptoDragPi === pi) return;
+  // Mover el producto
+  const srcLugar = _nuevoPptoLugares[_pptoDragLi];
+  const dstLugar = _nuevoPptoLugares[li];
+  const [moved] = srcLugar.productos.splice(_pptoDragPi, 1);
+  dstLugar.productos.splice(pi, 0, moved);
+  _pptoDragLi = null; _pptoDragPi = null;
+  _renderPptoLugaresOnly();
+};
 
 // Búsqueda en vivo de mobiliario Y juegos dentro del modal de presupuesto
 window._pptoMobSearch = function(inputEl, li, pi) {
@@ -248,10 +295,16 @@ window._pptoMobSearch = function(inputEl, li, pi) {
   const q = inputEl.value.trim().toLowerCase();
   if (!q) { dd.classList.add("hidden"); dd.innerHTML = ""; return; }
   const fecha = _pptoFechaEvento();
-  // Buscar mobiliario
-  const filtradosMob = _nuevoPptoMobiliario.filter(m => (m.nombre || "").toLowerCase().includes(q)).slice(0, 15);
+  // Buscar mobiliario (ordenado alfabéticamente)
+  const filtradosMob = _nuevoPptoMobiliario
+    .filter(m => (m.nombre || "").toLowerCase().includes(q))
+    .sort((a, b) => a.nombre.toLowerCase().localeCompare(b.nombre.toLowerCase()))
+    .slice(0, 15);
   // Buscar juegos
-  const filtradosJuegos = (_nuevoPptoJuegos || []).filter(j => (j.nombre || "").toLowerCase().includes(q)).slice(0, 5);
+  const filtradosJuegos = (_nuevoPptoJuegos || [])
+    .filter(j => (j.nombre || "").toLowerCase().includes(q))
+    .sort((a, b) => a.nombre.toLowerCase().localeCompare(b.nombre.toLowerCase()))
+    .slice(0, 5);
   if (filtradosMob.length === 0 && filtradosJuegos.length === 0) {
     dd.classList.remove("hidden");
     dd.innerHTML = `<div class="p-2 text-sm text-charcoal/40">Sin resultados</div>`;
@@ -277,12 +330,12 @@ window._pptoMobSearch = function(inputEl, li, pi) {
 };
 
 window._pptoMobSelect = function(li, pi, mobId) {
-  _nuevoPptoLugares[li].productos[pi] = { mobiliario_id: mobId, cantidad: _nuevoPptoLugares[li].productos[pi].cantidad || 1 };
+  _nuevoPptoLugares[li].productos[pi] = { mobiliario_id: mobId, cantidad: _nuevoPptoLugares[li].productos[pi].cantidad || 1, precio_manual: null };
   _renderPptoLugaresOnly();
 };
 
 window._pptoJuegoSelect = function(li, pi, juegoId) {
-  _nuevoPptoLugares[li].productos[pi] = { juego_id: juegoId, cantidad: 1 };
+  _nuevoPptoLugares[li].productos[pi] = { juego_id: juegoId, cantidad: 1, precio_manual: null };
   _renderPptoLugaresOnly();
 };
 
@@ -311,7 +364,10 @@ function _renderPptoModal(editData) {
       <div><label class="block text-sm mb-1 font-medium">Precio $/km</label><input id="nppto-precio-km" type="number" min="0" step="100" value="${_pptoPrecioKm || 7000}" placeholder="7000" oninput="_pptoPrecioKm=parseFloat(this.value)||7000;_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none"/></div>
     </div>
     <div class="text-xs text-charcoal/40">Traslado: $<span id="nppto-logistica-cost">0</span> (a $<span id="nppto-km-rate">7.000</span>/km)</div>
-    <div class="mt-2"><label class="block text-sm mb-1 font-medium">Armado y desarme ($)</label><input id="nppto-armado" type="number" min="0" step="1000" value="${p.costo_armado || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none" placeholder="0"/></div>
+    <div class="grid grid-cols-2 gap-3 mt-2">
+      <div><label class="block text-sm mb-1 font-medium">Armado y desarme ($)</label><input id="nppto-armado" type="number" min="0" step="1000" value="${p.costo_armado || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-ivory-dark rounded-lg p-2 focus:border-primary outline-none" placeholder="0"/></div>
+      <div><label class="block text-sm mb-1 font-medium">Descuento ($)</label><input id="nppto-descuento" type="number" min="0" step="1000" value="${p.descuento || 0}" oninput="_actualizarTotalesPpto()" class="w-full border border-red-200 rounded-lg p-2 focus:border-red-400 outline-none text-red-600" placeholder="Ej: 12000"/></div>
+    </div>
     <div><h4 class="font-medium text-sm mb-2 text-charcoal/70">Lugares y Mobiliario</h4><div id="nppto-lugares" class="space-y-3">${lugaresHtml}</div>
     <button type="button" onclick="_addLugar()" class="mt-2 text-sm text-primary hover:underline flex items-center gap-1"><span class="material-symbols-outlined text-sm">add</span> Agregar lugar</button></div>
     <div id="nppto-totales" class="mt-4 border-t border-ivory-dark pt-3 text-sm space-y-1"></div>
@@ -321,9 +377,9 @@ function _renderPptoModal(editData) {
   _renderPptoLugaresOnly();
 }
 
-window._addLugar = function() { _nuevoPptoLugares.push({ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1 }] }); _renderPptoLugaresOnly(); };
+window._addLugar = function() { _nuevoPptoLugares.push({ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1, precio_manual: null }] }); _renderPptoLugaresOnly(); };
 window._removeLugar = function(li) { _nuevoPptoLugares.splice(li, 1); _renderPptoLugaresOnly(); };
-window._addLugarProducto = function(li) { _nuevoPptoLugares[li].productos.push({ mobiliario_id: null, cantidad: 1 }); _renderPptoLugaresOnly(); };
+window._addLugarProducto = function(li) { _nuevoPptoLugares[li].productos.push({ mobiliario_id: null, cantidad: 1, precio_manual: null }); _renderPptoLugaresOnly(); };
 window._removeLugarProducto = function(li, pi) { _nuevoPptoLugares[li].productos.splice(pi, 1); _renderPptoLugaresOnly(); };
 window._actualizarTotalesPpto = _actualizarTotalesPpto;
 
@@ -340,9 +396,9 @@ window.guardarNuevoPresupuesto = async function(ev) {
     productos: lug.productos.filter(p => p.mobiliario_id || p.juego_id).map(p => {
       if (p.juego_id) {
         const jg = (_nuevoPptoJuegos || []).find(j => j.id === p.juego_id);
-        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad };
+        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad, precio_manual: p.precio_manual || null };
       }
-      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad };
+      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad, precio_manual: p.precio_manual || null };
     })
   }));
   const calc = _calcularPptoLocal();
@@ -359,6 +415,7 @@ window.guardarNuevoPresupuesto = async function(ev) {
     subtotal_mobiliario: calc.subtotalMob,
     costo_logistica: calc.costoLog,
     costo_armado: calc.costoArmado,
+    descuento: calc.descuento,
     total: calc.total,
     whatsapp_text: "",
     estado: "borrador"
@@ -390,18 +447,17 @@ window.editarPresupuestoModal = async function(id) {
       nombre: lug.nombre || "",
       productos: (lug.productos || lug.items || []).map(it => {
         if (it.juego_id) {
-          const jg = _nuevoPptoJuegos.find(j => j.id === it.juego_id);
-          return { juego_id: it.juego_id, cantidad: it.cantidad || 1 };
+          return { juego_id: it.juego_id, cantidad: it.cantidad || 1, precio_manual: it.precio_manual || null };
         }
         if (it.mobiliario_id || it.id) {
           const mid = it.mobiliario_id || it.id;
-          return { mobiliario_id: mid, cantidad: it.cantidad || 1 };
+          return { mobiliario_id: mid, cantidad: it.cantidad || 1, precio_manual: it.precio_manual || null };
         }
-        return { mobiliario_id: null, cantidad: it.cantidad || 1 };
+        return { mobiliario_id: null, cantidad: it.cantidad || 1, precio_manual: null };
       })
     }));
   } else {
-    _nuevoPptoLugares = [{ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1 }] }];
+    _nuevoPptoLugares = [{ nombre: "", productos: [{ mobiliario_id: null, cantidad: 1, precio_manual: null }] }];
   }
   _renderPptoModal(p);
 };
@@ -416,9 +472,9 @@ window.guardarEditarPresupuesto = async function(ev, id) {
     productos: lug.productos.filter(p => p.mobiliario_id || p.juego_id).map(p => {
       if (p.juego_id) {
         const jg = (_nuevoPptoJuegos || []).find(j => j.id === p.juego_id);
-        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad };
+        return { juego_id: p.juego_id, catalogo_key: jg ? jg.nombre : "Juego", cantidad: p.cantidad, precio_manual: p.precio_manual || null };
       }
-      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad };
+      return { mobiliario_id: p.mobiliario_id, catalogo_key: (_nuevoPptoMobiliario.find(m => m.id === p.mobiliario_id)?.nombre || ""), cantidad: p.cantidad, precio_manual: p.precio_manual || null };
     })
   }));
   const calc = _calcularPptoLocal();
@@ -435,6 +491,7 @@ window.guardarEditarPresupuesto = async function(ev, id) {
     subtotal_mobiliario: calc.subtotalMob,
     costo_logistica: calc.costoLog,
     costo_armado: calc.costoArmado,
+    descuento: calc.descuento,
     total: calc.total,
     whatsapp_text: "",
     estado: document.getElementById("nppto-estado")?.value || "borrador"
