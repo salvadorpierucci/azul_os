@@ -71,12 +71,12 @@ function _renderMobiliarioGrid() {
           <button onclick="event.stopPropagation();confirmarEliminarMobiliario(${m.id},'${m.nombre.replace(/'/g,"\\'")}')" class="bg-white/90 backdrop-blur-sm p-1 rounded shadow-sm hover:bg-red-500 hover:text-white transition" title="Eliminar"><span class="material-symbols-outlined text-sm">delete</span></button>
         </div>
       </div>
+      ${m.descripcion ? `<p class="px-3 pt-2 text-xs text-charcoal/40 text-center italic">${m.descripcion}</p>` : ''}
       <div class="p-3 flex items-start gap-2">
         <span class="material-symbols-outlined text-xs text-charcoal/30 mt-0.5 cursor-grab active:cursor-grabbing flex-shrink-0 drag-handle" title="Arrastrar para reordenar" draggable="true" data-mob-id="${m.id}" ondragstart="_mobDragStart(event, ${m.id})" ondragend="_mobDragEnd(event)">drag_indicator</span>
         <div class="flex-1 min-w-0 cursor-pointer" onclick="editMobiliario(${m.id})">
           <p class="font-medium text-sm truncate">${m.nombre}</p>
           <p class="text-xs text-charcoal/50">${m.categoria}</p>
-          ${m.descripcion ? `<p class="text-xs text-charcoal/40 mt-1 line-clamp-2">${m.descripcion}</p>` : ''}
           <div class="flex justify-between mt-2 items-center">
             <span class="text-sm font-display text-navy">$${m.precio_alquiler?.toLocaleString("es-AR")}</span>
             <span class="text-xs ${stockClass}">${stockLabel}</span>
